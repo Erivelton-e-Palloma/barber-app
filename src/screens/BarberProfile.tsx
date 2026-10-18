@@ -12,7 +12,6 @@ export default function BarberProfile({ route, navigation }: any) {
   
   const [selectedService, setSelectedService] = useState<any>(null);
 
-  // Função auxiliar para alertas Web/Mobile
   function showAlert(title: string, msg: string) {
       if (Platform.OS === 'web') alert(`${title}\n${msg}`);
       else Alert.alert(title, msg);
@@ -64,14 +63,33 @@ export default function BarberProfile({ route, navigation }: any) {
 
   return (
     <View className="flex-1 bg-zinc-900">
-      <View className="items-center pt-8 pb-6 bg-zinc-800 rounded-b-3xl shadow-lg">
+      {/* CABEÇALHO DO BARBEIRO ATUALIZADO */}
+      <View className="items-center pt-12 pb-6 bg-zinc-800 rounded-b-3xl shadow-lg">
         <Image source={{ uri: barber.foto }} className="w-32 h-32 rounded-full border-2 border-orange-500 mb-4" />
         <Text className="text-white text-2xl font-bold">{barber.nome}</Text>
         <Text className="text-zinc-400 text-lg">{barber.especialidade}</Text>
-        <Text className="text-orange-400 font-bold mt-2">⭐ {barber.nota} • 120 Avaliações</Text>
+        
+        {/* MENSAGEM NOVA PARA INSTRUIR O CLIENTE */}
+        <Text className="text-orange-500 text-sm font-bold mt-2 animate-pulse">
+           👇 Toque em um serviço abaixo para agendar
+        </Text>
+        
+        <Text className="text-orange-400 font-bold mt-2">⭐ {barber.nota || "5.0"} • 120 Avaliações</Text>
       </View>
 
-      <Text className="text-white text-xl font-bold px-6 mt-8 mb-4">Escolha o Serviço</Text>
+      {/* BLOCO DO ENDEREÇO DA LOJA */}
+      <View className="px-6 mt-6 mb-2">
+        <View className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700">
+            <Text className="text-2xl mr-3">📍</Text>
+            <View>
+                <Text className="text-white font-bold">Localização</Text>
+                {/* O Endereço fixo que depois puxaremos do banco */}
+                <Text className="text-zinc-400 text-sm mt-1">Av. Apolônio Sales, 1049 - Paulo Afonso</Text>
+            </View>
+        </View>
+      </View>
+
+      <Text className="text-white text-xl font-bold px-6 mt-4 mb-2">Catálogo de Serviços</Text>
 
       {loading ? (
         <ActivityIndicator size="large" color="#f97316" className="mt-10" />
@@ -80,8 +98,6 @@ export default function BarberProfile({ route, navigation }: any) {
           data={services}
           keyExtractor={(item) => item.id}
           className="px-6"
-          // --- CORREÇÃO DE ESPAÇAMENTO ---
-          // Adiciona 120px de espaço no final da lista para o botão não cobrir o último item
           contentContainerStyle={{ paddingBottom: 120 }}
           renderItem={({ item }) => {
             const isSelected = selectedService?.id === item.id;
@@ -111,7 +127,6 @@ export default function BarberProfile({ route, navigation }: any) {
         />
       )}
       
-      {/* Botão flutuante só aparece se tiver serviço selecionado */}
       {selectedService && (
         <View className="p-6 absolute bottom-0 w-full bg-zinc-900/95 border-t border-zinc-800">
           <TouchableOpacity 
@@ -123,7 +138,7 @@ export default function BarberProfile({ route, navigation }: any) {
         </View>
       )}
 
-      <TouchableOpacity onPress={() => navigation.goBack()} className="absolute top-4 left-4 bg-black/50 p-2 rounded-full">
+      <TouchableOpacity onPress={() => navigation.goBack()} className="absolute top-10 left-4 bg-black/50 p-2 rounded-full">
         <Text className="text-white font-bold">⬅ Voltar</Text>
       </TouchableOpacity>
     </View>

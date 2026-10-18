@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator, Platform } from 'react-native';
 import { db } from '../config/firebase';
 import { collection, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { useIsFocused } from '@react-navigation/native';
@@ -35,11 +35,19 @@ export default function ManageBarbers({ navigation }: any) {
     if (isFocused) fetchBarbers();
   }, [isFocused]);
 
+  // --- CORREÇÃO DO BOTÃO DE EXCLUIR (WEB/MOBILE) ---
   function confirmDelete(id: string, nome: string) {
-    Alert.alert("Excluir", `Remover ${nome}?`, [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Sim", style: "destructive", onPress: () => handleDelete(id) }
-    ]);
+    if (Platform.OS === 'web') {
+        const confirm = window.confirm(`Remover o barbeiro ${nome}?`);
+        if (confirm) {
+            handleDelete(id);
+        }
+    } else {
+        Alert.alert("Excluir", `Remover ${nome}?`, [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Sim", style: "destructive", onPress: () => handleDelete(id) }
+        ]);
+    }
   }
 
   async function handleDelete(id: string) {
@@ -58,7 +66,6 @@ export default function ManageBarbers({ navigation }: any) {
         <Text className="text-white text-2xl font-bold">Equipe</Text>
       </View>
 
-      {/* BOTÃO ADICIONAR (RECUPERADO!) */}
       <TouchableOpacity 
         className="bg-orange-500 p-4 rounded-xl mb-6 items-center flex-row justify-center"
         onPress={() => navigation.navigate('AddBarber')}

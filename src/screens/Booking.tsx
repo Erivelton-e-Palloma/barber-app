@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Linking, TextInput, Platform } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native'; // <--- Importação nova!
+import { useFocusEffect } from '@react-navigation/native';
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
@@ -19,20 +19,35 @@ export default function Booking({ route, navigation }: any) {
   const [busyTimes, setBusyTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
 
+  // --- NOVA LÓGICA DE MESES ---
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = Mês atual, 1 = Próximo mês
+
   const paymentOptions = [
     { id: 'dinheiro', label: '💵 Dinheiro' },
     { id: 'pix', label: '💠 Pix' },
     { id: 'cartao', label: '💳 Cartão' },
   ];
 
-  const generateDates = () => {
+  const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+
+  const getMonthName = (offset: number) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + offset);
+      return monthNames[d.getMonth()];
+  };
+
+  const generateDatesForMonth = (offset: number) => {
     const dates = [];
     const today = new Date();
     
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      
+    // Define a data alvo baseada no offset (0 = hoje, 1 = dia 1 do próximo mês)
+    const targetMonthDate = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    
+    let startDate = offset === 0 ? today : targetMonthDate;
+    let lastDay = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth() + 1, 0).getDate();
+
+    for (let i = startDate.getDate(); i <= lastDay; i++) {
+      const date = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth(), i);
       const diaSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][date.getDay()];
       
       const year = date.getFullYear();
@@ -40,25 +55,19 @@ export default function Booking({ route, navigation }: any) {
       const day = String(date.getDate()).padStart(2, '0');
       const fullDateLocal = `${year}-${month}-${day}`;
 
-      const diaMes = date.getDate().toString().padStart(2, '0');
-      const mesDisplay = (date.getMonth() + 1).toString().padStart(2, '0');
-      
       dates.push({
         fullDate: fullDateLocal, 
-        display: `${diaSemana} ${diaMes}/${mesDisplay}`
+        display: `${diaSemana} ${day}/${month}`
       });
     }
     return dates;
   };
 
-  const dates = generateDates();
+  const dates = generateDatesForMonth(monthOffset);
 
-  // --- FORÇA A ATUALIZAÇÃO SEMPRE QUE A TELA ABRIR (Resolve o bug do horário fantasma) ---
   useFocusEffect(
     useCallback(() => {
-      if (selectedDate) {
-        checkAvailability(selectedDate);
-      }
+      if (selectedDate) checkAvailability(selectedDate);
     }, [selectedDate])
   );
 
@@ -79,7 +88,7 @@ export default function Booking({ route, navigation }: any) {
         const times = querySnapshot.docs.map(doc => doc.data().horario);
         setBusyTimes(times);
     } catch (error) {
-        console.log("Erro ao verificar disponibilidade", error);
+        console.log("Erro", error);
     } finally {
         setLoadingTimes(false);
     }
@@ -94,7 +103,6 @@ export default function Booking({ route, navigation }: any) {
     document.body.removeChild(link);
   };
 
-  // --- SOLUÇÃO DO WHATSAPP PARA IPHONE E ANDROID ---
   const openWhatsAppToBarber = async (date: string, time: string, method: string) => {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
@@ -105,19 +113,17 @@ export default function Booking({ route, navigation }: any) {
         const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
         forceOpenWeb(urlWeb);
     } else {
-        // Deep Link Nativo: Força o iPhone/Android a pular o navegador e abrir o App direto
         const urlMobile = `whatsapp://send?text=${encodeURIComponent(message)}`;
         try {
             const supported = await Linking.canOpenURL(urlMobile);
             if (supported) {
                 await Linking.openURL(urlMobile);
             } else {
-                // Plano B: Se não tiver o app instalado, vai pro navegador
                 const urlFallback = `https://wa.me/?text=${encodeURIComponent(message)}`;
                 await Linking.openURL(urlFallback);
             }
         } catch (error) {
-            console.log("Erro ao abrir WhatsApp", error);
+            console.log("Erro zap", error);
         }
     }
   };
@@ -197,19 +203,16 @@ export default function Booking({ route, navigation }: any) {
       }
 
     } catch (error) {
-      console.log("Erro ao agendar:", error);
-      alertOrConfirm("Erro", "Não foi possível realizar o agendamento.");
+      console.log("Erro", error);
+      alertOrConfirm("Erro", "Não foi possível agendar.");
     } finally {
       setLoading(false);
     }
   }
 
   function alertOrConfirm(title: string, msg: string) {
-      if (Platform.OS === 'web') {
-          alert(`${title}\n${msg}`);
-      } else {
-          Alert.alert(title, msg);
-      }
+      if (Platform.OS === 'web') alert(`${title}\n${msg}`);
+      else Alert.alert(title, msg);
   }
 
   return (
@@ -230,7 +233,7 @@ export default function Booking({ route, navigation }: any) {
             <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
                 <Text className="text-zinc-400">Serviço Escolhido:</Text>
                 <Text className="text-white text-xl font-bold">{service.nome}</Text>
-                <Text className="text-orange-500 font-bold">R$ {service.preco.toFixed(2)} • {service.duracao} min</Text>
+                <Text className="text-orange-500 font-bold">R$ {service.preco?.toFixed(2)} • {service.duracao} min</Text>
                 <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
             </View>
 
@@ -252,6 +255,18 @@ export default function Booking({ route, navigation }: any) {
             />
 
             <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
+            
+            {/* NOVO: SELETOR DE MESES */}
+            <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
+                <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
+                    <Text className={monthOffset === 0 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"← Atual"}</Text>
+                </TouchableOpacity>
+                <Text className="text-white font-bold text-lg">{getMonthName(monthOffset)}</Text>
+                <TouchableOpacity onPress={() => setMonthOffset(1)} disabled={monthOffset === 1}>
+                    <Text className={monthOffset === 1 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"Próximo →"}</Text>
+                </TouchableOpacity>
+            </View>
+
             <View className="h-20 mb-6">
                 <FlatList 
                 horizontal

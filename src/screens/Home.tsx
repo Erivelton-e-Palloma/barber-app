@@ -48,16 +48,13 @@ export default function Home({ navigation }: any) {
     fetchBarbers();
   }, []);
 
-  // --- LÓGICA DE SAIR ---
   async function performLogout() {
       try {
         await signOut(auth);
 
         if (Platform.OS === 'web') {
-            // Limpeza extra para Web
             window.localStorage.clear();
             window.sessionStorage.clear();
-            // Redirecionamento forçado
             window.location.href = "/";
         }
       } catch (error) {
@@ -68,13 +65,11 @@ export default function Home({ navigation }: any) {
 
   function handleLogout() {
     if (Platform.OS === 'web') {
-        // WEB: Usa confirmação nativa do navegador
         const confirmou = window.confirm("Deseja realmente sair do sistema?");
         if (confirmou) {
             performLogout();
         }
     } else {
-        // MOBILE: Usa o Alert nativo do celular
         Alert.alert("Sair", "Deseja sair da sua conta?", [
           { text: "Cancelar", style: "cancel" },
           { text: "Sim, Sair", onPress: performLogout }
@@ -97,7 +92,7 @@ export default function Home({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <View className="mb-8">
+      <View className="mb-6">
         <TouchableOpacity 
           className="bg-orange-500 p-4 rounded-xl mb-3 items-center"
           onPress={() => navigation.navigate('MyAppointments')}
@@ -115,11 +110,23 @@ export default function Home({ navigation }: any) {
         )}
       </View>
 
-      <Text className="text-white text-xl font-bold mb-4">Nossos Profissionais</Text>
+      {/* NOVO: BLOCO DE ENDEREÇO DA BARBEARIA */}
+      <View className="bg-zinc-800 p-4 rounded-xl mb-6 flex-row items-center border border-zinc-700">
+        <Text className="text-2xl mr-3">📍</Text>
+        <View>
+            <Text className="text-white font-bold">Localização</Text>
+            <Text className="text-zinc-400 text-sm mt-1">Av. Apolônio Sales, 1049 - Paulo Afonso</Text>
+        </View>
+      </View>
+
+      {/* TÍTULO ATUALIZADO */}
+      <Text className="text-white text-xl font-bold mb-4">Nossos Profissionais Barbeiros(as)</Text>
 
       <FlatList
         data={barbers}
         keyExtractor={(item) => item.id}
+        // Espaçamento extra no final para não colar no rodapé
+        contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
           <TouchableOpacity 
             onPress={() => navigation.navigate('BarberProfile', { barber: item })}
@@ -127,12 +134,12 @@ export default function Home({ navigation }: any) {
           >
             <Image 
               source={{ uri: item.foto }} 
-              className="w-16 h-16 rounded-full mr-4 bg-zinc-700" 
+              className="w-16 h-16 rounded-full mr-4 bg-zinc-700 border border-zinc-600" 
             />
             <View>
               <Text className="text-white font-bold text-lg">{item.nome}</Text>
               <Text className="text-zinc-400 text-sm">{item.especialidade}</Text>
-              <Text className="text-orange-500 text-sm mt-1">⭐ {item.nota}</Text>
+              <Text className="text-orange-500 text-sm mt-1">⭐ {item.nota || "5.0"}</Text>
             </View>
           </TouchableOpacity>
         )}

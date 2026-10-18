@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { db } from '../config/firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // <--- 1. Importamos a memória
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function AddBarber({ navigation, route }: any) {
   const [nome, setNome] = useState('');
@@ -10,9 +10,16 @@ export default function AddBarber({ navigation, route }: any) {
   const [foto, setFoto] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Verifica edição
   const barberToEdit = route.params?.barberToEdit;
   const isEditing = !!barberToEdit;
+
+  // --- NOVA GRADE DE HORÁRIOS DE 30 EM 30 MINUTOS ---
+  const gradeHorarios = [
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", 
+    "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", 
+    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", 
+    "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
+  ];
 
   useEffect(() => {
     if (isEditing) {
@@ -32,7 +39,6 @@ export default function AddBarber({ navigation, route }: any) {
     setLoading(true);
 
     try {
-      // 2. Buscamos o ID da barbearia na memória antes de salvar
       const shopId = await AsyncStorage.getItem('@delp_shopId');
       
       if (!shopId) {
@@ -48,17 +54,15 @@ export default function AddBarber({ navigation, route }: any) {
       };
 
       if (isEditing) {
-         // Atualiza (Na edição não precisamos mudar o shopId, mantemos o que já estava)
          const barberRef = doc(db, "barbeiros", barberToEdit.id);
          await updateDoc(barberRef, dataToSave);
          Alert.alert("Sucesso!", "Dados do barbeiro atualizados!");
       } else {
-         // 3. Cria novo (AGORA COM O shopId!)
          await addDoc(collection(db, "barbeiros"), {
             ...dataToSave,
-            shopId: shopId, // <--- AQUI ESTÁ A MÁGICA DO SAAS
+            shopId: shopId, 
             nota: 5.0,
-            horarios: ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00", "18:00"]
+            horarios: gradeHorarios // <--- Salvando a nova grade de 30/30min
          });
          Alert.alert("Sucesso!", "Barbeiro cadastrado na unidade!");
       }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, ActivityIndicator, Switch, Platform } from 'react-native';
 import { db } from '../config/firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
@@ -7,12 +7,10 @@ export default function SuperAdmin({ navigation }: any) {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Dados para NOVA barbearia
   const [newShopName, setNewShopName] = useState('');
   const [newShopCode, setNewShopCode] = useState('');
-  const [newShopEmail, setNewShopEmail] = useState(''); // <--- NOVO CAMPO
+  const [newShopEmail, setNewShopEmail] = useState('');
 
-  // 1. Buscar todas as barbearias
   async function fetchShops() {
     setLoading(true);
     try {
@@ -34,7 +32,6 @@ export default function SuperAdmin({ navigation }: any) {
     fetchShops();
   }, []);
 
-  // 2. Criar nova barbearia
   async function handleCreateShop() {
     if (newShopName === '' || newShopCode === '' || newShopEmail === '') {
       Alert.alert("Erro", "Preencha Nome, Código e Email do Dono.");
@@ -53,7 +50,7 @@ export default function SuperAdmin({ navigation }: any) {
         await addDoc(collection(db, "barbearias"), {
             nome: newShopName,
             codigo: newShopCode.toUpperCase(),
-            emailDono: newShopEmail.toLowerCase().trim(), // <--- SALVANDO O EMAIL DO DONO
+            emailDono: newShopEmail.toLowerCase().trim(),
             ativo: true,
             createdAt: new Date().toISOString()
         });
@@ -69,7 +66,6 @@ export default function SuperAdmin({ navigation }: any) {
     }
   }
 
-  // 3. Bloquear/Desbloquear
   async function toggleShopStatus(id: string, currentStatus: boolean) {
       try {
           const shopRef = doc(db, "barbearias", id);
@@ -81,12 +77,19 @@ export default function SuperAdmin({ navigation }: any) {
       } catch (error) { Alert.alert("Erro", "Falha ao atualizar."); }
   }
 
-  // 4. Excluir
+  // --- CORREÇÃO DO BOTÃO DE EXCLUIR (WEB/MOBILE) ---
   function confirmDelete(id: string, name: string) {
-    Alert.alert("Excluir", `Apagar "${name}" permanentemente?`, [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Sim, Excluir", style: "destructive", onPress: () => handleDeleteShop(id) }
-    ]);
+    if (Platform.OS === 'web') {
+        const confirm = window.confirm(`Apagar "${name}" permanentemente?`);
+        if (confirm) {
+            handleDeleteShop(id);
+        }
+    } else {
+        Alert.alert("Excluir", `Apagar "${name}" permanentemente?`, [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Sim, Excluir", style: "destructive", onPress: () => handleDeleteShop(id) }
+        ]);
+    }
   }
 
   async function handleDeleteShop(id: string) {
@@ -106,7 +109,6 @@ export default function SuperAdmin({ navigation }: any) {
         <View className="w-8" /> 
       </View>
 
-      {/* FORMULÁRIO DE CRIAÇÃO */}
       <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
         <Text className="text-white font-bold mb-3">🏭 Criar Nova Barbearia</Text>
         
