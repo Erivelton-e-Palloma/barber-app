@@ -1,31 +1,61 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Image, Alert, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { signOut } from 'firebase/auth'; 
 import { auth, db } from '../config/firebase'; 
-import { collection, getDocs, query, where } from 'firebase/firestore'; 
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Home({ navigation }: any) {
   const [barbers, setBarbers] = useState<any[]>([]);
   const [shopName, setShopName] = useState('');
   const [isOwner, setIsOwner] = useState(false); 
+  
+  // Estados do Cartão Fidelidade
+  const [pontos, setPontos] = useState(0);
+  const [meta, setMeta] = useState(10);
 
-  useEffect(() => {
-    async function checkPermission() {
-        const name = await AsyncStorage.getItem('@delp_shopName');
-        const ownerEmail = await AsyncStorage.getItem('@delp_ownerEmail');
-        const currentUserEmail = auth.currentUser?.email;
+  async function checkPermissionAndLoyalty() {
+      const name = await AsyncStorage.getItem('@delp_shopName');
+      const shopId = await AsyncStorage.getItem('@delp_shopId');
+      const ownerEmail = await AsyncStorage.getItem('@delp_ownerEmail');
+      const currentUser = auth.currentUser;
 
-        setShopName(name || "Barbearia");
+      setShopName(name || "Barbearia");
 
-        if (currentUserEmail && ownerEmail && currentUserEmail.toLowerCase() === ownerEmail.toLowerCase()) {
-            setIsOwner(true); 
-        } else {
-            setIsOwner(false);
-        }
-    }
-    checkPermission();
-  }, []);
+      // Verifica se é dono
+      if (currentUser?.email && ownerEmail && currentUser.email.toLowerCase() === ownerEmail.toLowerCase()) {
+          setIsOwner(true); 
+      } else {
+          setIsOwner(false);
+      }
+
+      // Busca os dados da Fidelidade
+      if (shopId && currentUser) {
+          try {
+              // 1. Puxa a meta da barbearia
+              const shopSnap = await getDoc(doc(db, "barbearias", shopId));
+              if (shopSnap.exists() && shopSnap.data().metaFidelidade) {
+                  setMeta(shopSnap.data().metaFidelidade);
+              }
+
+              // 2. Puxa os pontos do cliente logado
+              const userSnap = await getDoc(doc(db, "usuarios", currentUser.uid));
+              if (userSnap.exists() && userSnap.data().pontosFidelidade) {
+                  setPontos(userSnap.data().pontosFidelidade);
+              }
+          } catch (error) {
+              console.log("Erro ao buscar dados de fidelidade:", error);
+          }
+      }
+  }
+
+  // useFocusEffect recarrega os dados toda vez que o cliente volta pra Home
+  useFocusEffect(
+    useCallback(() => {
+        checkPermissionAndLoyalty();
+    }, [])
+  );
 
   useEffect(() => {
     async function fetchBarbers() {
@@ -51,7 +81,6 @@ export default function Home({ navigation }: any) {
   async function performLogout() {
       try {
         await signOut(auth);
-
         if (Platform.OS === 'web') {
             window.localStorage.clear();
             window.sessionStorage.clear();
@@ -65,10 +94,7 @@ export default function Home({ navigation }: any) {
 
   function handleLogout() {
     if (Platform.OS === 'web') {
-        const confirmou = window.confirm("Deseja realmente sair do sistema?");
-        if (confirmou) {
-            performLogout();
-        }
+        if (window.confirm("Deseja realmente sair do sistema?")) performLogout();
     } else {
         Alert.alert("Sair", "Deseja sair da sua conta?", [
           { text: "Cancelar", style: "cancel" },
@@ -76,6 +102,9 @@ export default function Home({ navigation }: any) {
         ]);
     }
   }
+
+  // Cálculo da barra de progresso
+  const progresso = Math.min((pontos / meta) * 100, 100);
 
   return (
     <View className="flex-1 bg-zinc-900 px-6 pt-12">
@@ -90,6 +119,31 @@ export default function Home({ navigation }: any) {
         >
           <Text className="text-red-400 font-bold">Sair</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* NOVO: CARTÃO FIDELIDADE DIGITAL */}
+      <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-6 border border-orange-500/30 shadow-lg">
+          <View className="flex-row justify-between items-center mb-3">
+              <View className="flex-row items-center">
+                  <Text className="text-2xl mr-2">🎁</Text>
+                  <Text className="text-white font-bold text-lg">Cartão Fidelidade</Text>
+              </View>
+              <Text className="text-orange-500 font-bold text-xl">{pontos}/{meta}</Text>
+          </View>
+          
+          {/* Barra de Progresso */}
+          <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2">
+              <View 
+                  className="h-full bg-orange-500 rounded-full" 
+                  style={{ width: `${progresso}%` }} 
+              />
+          </View>
+
+          {pontos >= meta ? (
+              <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Você atingiu a meta e ganhou o prêmio!</Text>
+          ) : (
+              <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o seu brinde.</Text>
+          )}
       </View>
 
       <View className="mb-6">
@@ -110,7 +164,6 @@ export default function Home({ navigation }: any) {
         )}
       </View>
 
-      {/* NOVO: BLOCO DE ENDEREÇO DA BARBEARIA */}
       <View className="bg-zinc-800 p-4 rounded-xl mb-6 flex-row items-center border border-zinc-700">
         <Text className="text-2xl mr-3">📍</Text>
         <View>
@@ -119,13 +172,11 @@ export default function Home({ navigation }: any) {
         </View>
       </View>
 
-      {/* TÍTULO ATUALIZADO */}
       <Text className="text-white text-xl font-bold mb-4">Nossos Barbeiros(as)</Text>
 
       <FlatList
         data={barbers}
         keyExtractor={(item) => item.id}
-        // Espaçamento extra no final para não colar no rodapé
         contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
           <TouchableOpacity 

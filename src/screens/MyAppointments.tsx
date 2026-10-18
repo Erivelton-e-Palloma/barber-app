@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { db, auth } from '../config/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function MyAppointments({ navigation }: any) {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Estado para sabermos se quem está logado é o Dono da Barbearia
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   async function fetchAppointments() {
@@ -22,37 +20,23 @@ export default function MyAppointments({ navigation }: any) {
           return;
       }
 
-      // 1. A NOVA VERIFICAÇÃO INTELIGENTE (Pelo Painel de Super Admin)
       let userIsAdmin = false;
-      
-      // Busca os dados da Barbearia atual
       const shopRef = doc(db, "barbearias", shopId);
       const shopSnap = await getDoc(shopRef);
 
       if (shopSnap.exists()) {
           const shopData = shopSnap.data();
-          // Verifica se o email logado é igual ao emailDono cadastrado no seu Painel Super Admin
           if (user.email === shopData.emailDono) {
               userIsAdmin = true;
           }
       }
       setIsSuperAdmin(userIsAdmin);
 
-      // 2. MONTA A BUSCA BASEADA NA PERMISSÃO
       let q;
       if (userIsAdmin) {
-          // VISAO DO DONO: Puxa TODOS os agendamentos da loja dele
-          q = query(
-            collection(db, "agendamentos"),
-            where("shopId", "==", shopId) 
-          );
+          q = query(collection(db, "agendamentos"), where("shopId", "==", shopId));
       } else {
-          // VISAO DO CLIENTE: Puxa APENAS os agendamentos que têm o ID dele
-          q = query(
-            collection(db, "agendamentos"),
-            where("shopId", "==", shopId),
-            where("clienteId", "==", user.uid)
-          );
+          q = query(collection(db, "agendamentos"), where("shopId", "==", shopId), where("clienteId", "==", user.uid));
       }
 
       const querySnapshot = await getDocs(q);
@@ -61,11 +45,8 @@ export default function MyAppointments({ navigation }: any) {
         ...doc.data()
       }));
 
-      // Ordena por data e horário
       list.sort((a: any, b: any) => {
-        if (a.data !== b.data) {
-            return a.data.localeCompare(b.data);
-        }
+        if (a.data !== b.data) return a.data.localeCompare(b.data);
         return a.horario.localeCompare(b.horario);
       });
 
@@ -86,13 +67,9 @@ export default function MyAppointments({ navigation }: any) {
           await deleteDoc(doc(db, "agendamentos", id));
           setAppointments(prev => prev.filter(item => item.id !== id));
           
-          if (Platform.OS === 'web') {
-              alert("✅ Agendamento cancelado com sucesso! O horário já está disponível novamente.");
-          } else {
-              Alert.alert("Sucesso", "Agendamento cancelado! O horário já está disponível novamente.");
-          }
+          if (Platform.OS === 'web') alert("✅ Agendamento cancelado com sucesso!");
+          else Alert.alert("Sucesso", "Agendamento cancelado!");
       } catch (error) {
-          console.log("Erro ao cancelar:", error);
           if (Platform.OS === 'web') alert("Erro ao cancelar agendamento.");
           else Alert.alert("Erro", "Não foi possível cancelar.");
       }
@@ -100,23 +77,41 @@ export default function MyAppointments({ navigation }: any) {
 
   function handleCancel(id: string) {
     if (Platform.OS === 'web') {
-        const confirm = window.confirm("Deseja realmente cancelar este agendamento?");
-        if (confirm) {
-            confirmAndCancel(id);
-        }
+        if (window.confirm("Deseja realmente cancelar este agendamento?")) confirmAndCancel(id);
     } else {
-        Alert.alert(
-          "Cancelar",
-          "Deseja cancelar este agendamento?",
-          [
+        Alert.alert("Cancelar", "Deseja cancelar este agendamento?", [
             { text: "Não", style: "cancel" },
-            { 
-              text: "Sim, Cancelar", 
-              style: "destructive", 
-              onPress: () => confirmAndCancel(id)
-            }
-          ]
-        );
+            { text: "Sim, Cancelar", style: "destructive", onPress: () => confirmAndCancel(id) }
+        ]);
+    }
+  }
+
+  // NOVO: Função para o Barbeiro concluir o serviço e dar o ponto ao cliente
+  async function handleCompleteService(agendamentoId: string, clienteId: string) {
+    try {
+        // 1. Marca o agendamento como concluido
+        await updateDoc(doc(db, "agendamentos", agendamentoId), {
+            status: "concluido"
+        });
+
+        // 2. Adiciona +1 ponto no perfil do cliente
+        if (clienteId) {
+            await updateDoc(doc(db, "usuarios", clienteId), {
+                pontosFidelidade: increment(1)
+            });
+        }
+
+        // 3. Atualiza a tela
+        setAppointments(prev => prev.map(item => 
+            item.id === agendamentoId ? { ...item, status: "concluido" } : item
+        ));
+
+        if (Platform.OS === 'web') alert("Serviço concluído! O cliente ganhou +1 ponto de fidelidade.");
+        else Alert.alert("Sucesso", "Serviço concluído! O cliente ganhou +1 ponto.");
+    } catch (error) {
+        console.log("Erro ao concluir:", error);
+        if (Platform.OS === 'web') alert("Erro ao concluir serviço.");
+        else Alert.alert("Erro", "Falha ao concluir o serviço.");
     }
   }
 
@@ -144,45 +139,69 @@ export default function MyAppointments({ navigation }: any) {
           data={appointments}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
-          renderItem={({ item }) => (
-            <View className="bg-zinc-800 p-4 rounded-xl mb-4 border border-zinc-700">
-              <View className="flex-row justify-between items-start mb-2">
-                <View className="flex-1 pr-2">
-                  <Text className="text-orange-500 font-bold text-lg">{item.servicoNome}</Text>
-                  
-                  {/* SE FOR ADMIN, MOSTRA OS DADOS DO CLIENTE */}
-                  {isSuperAdmin && (
-                      <View className="mt-1 bg-zinc-900/50 p-2 rounded border border-zinc-700">
-                          <Text className="text-white font-bold text-sm">Cliente: {item.clienteNome || 'Não informado'}</Text>
-                          <Text className="text-zinc-400 text-xs">WhatsApp: {item.clienteTelefone || 'N/A'}</Text>
-                      </View>
-                  )}
-                  
-                  <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
-                </View>
-                <View className="items-end">
-                    <Text className="text-white font-bold text-xl">
-                    R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
+          renderItem={({ item }) => {
+            const isConcluido = item.status === 'concluido';
+
+            return (
+              <View className={`p-4 rounded-xl mb-4 border ${isConcluido ? 'bg-zinc-900 border-green-500/50' : 'bg-zinc-800 border-zinc-700'}`}>
+                <View className="flex-row justify-between items-start mb-2">
+                  <View className="flex-1 pr-2">
+                    <Text className={`${isConcluido ? 'text-green-500' : 'text-orange-500'} font-bold text-lg`}>
+                        {item.servicoNome} {isConcluido && "✅"}
                     </Text>
-                    {item.entradaPaga && (
-                        <Text className="text-green-500 font-bold text-xs mt-1">✅ 50% no Pix</Text>
+                    
+                    {isSuperAdmin && (
+                        <View className="mt-1 bg-zinc-900/50 p-2 rounded border border-zinc-700">
+                            <Text className="text-white font-bold text-sm">Cliente: {item.clienteNome || 'Não informado'}</Text>
+                            <Text className="text-zinc-400 text-xs">WhatsApp: {item.clienteTelefone || 'N/A'}</Text>
+                        </View>
                     )}
+                    
+                    <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
+                  </View>
+                  <View className="items-end">
+                      <Text className="text-white font-bold text-xl">
+                      R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
+                      </Text>
+                      {item.entradaPaga && !isConcluido && (
+                          <Text className="text-green-500 font-bold text-xs mt-1">✅ 50% no Pix</Text>
+                      )}
+                  </View>
                 </View>
-              </View>
 
-              <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2">
-                <Text className="text-white font-bold mr-2">📅 {formatDate(item.data)}</Text>
-                <Text className="text-white font-bold">⏰ {item.horario}</Text>
-              </View>
+                <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2">
+                  <Text className="text-white font-bold mr-2">📅 {formatDate(item.data)}</Text>
+                  <Text className="text-white font-bold">⏰ {item.horario}</Text>
+                </View>
 
-              <TouchableOpacity 
-                onPress={() => handleCancel(item.id)}
-                className="bg-red-500/10 border border-red-500 p-3 rounded-lg items-center"
-              >
-                <Text className="text-red-500 font-bold">Cancelar Agendamento 🗑️</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                {/* BOTÕES DE AÇÃO BASEADOS NO STATUS */}
+                {!isConcluido ? (
+                    <View className="flex-row justify-between gap-2">
+                        <TouchableOpacity 
+                            onPress={() => handleCancel(item.id)}
+                            className="flex-1 bg-red-500/10 border border-red-500 p-3 rounded-lg items-center"
+                        >
+                            <Text className="text-red-500 font-bold">Cancelar</Text>
+                        </TouchableOpacity>
+
+                        {/* Só o Admin pode concluir e dar o ponto */}
+                        {isSuperAdmin && (
+                            <TouchableOpacity 
+                                onPress={() => handleCompleteService(item.id, item.clienteId)}
+                                className="flex-1 bg-green-600 p-3 rounded-lg items-center"
+                            >
+                                <Text className="text-white font-bold">Concluir ✅</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ) : (
+                    <View className="bg-green-500/10 p-3 rounded-lg items-center border border-green-500/30">
+                        <Text className="text-green-400 font-bold">Serviço Finalizado (+1 Ponto concedido)</Text>
+                    </View>
+                )}
+              </View>
+            );
+          }}
           ListEmptyComponent={() => (
             <Text className="text-zinc-500 text-center mt-10">Nenhum agendamento encontrado.</Text>
           )}
