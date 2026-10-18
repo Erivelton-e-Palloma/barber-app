@@ -119,7 +119,7 @@ export default function AddService({ navigation, route }: any) {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text className="text-white font-bold text-lg">
-            {isEditing ? '💾 Atualizar Serviço' : '💾 Salvar Serviço'}
+            {isEditing ? '💾 Atualizar Serviço' : '💾 Salvar'}
           </Text>
         )}
       </TouchableOpacity>

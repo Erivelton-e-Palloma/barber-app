@@ -120,7 +120,7 @@ export default function Home({ navigation }: any) {
       </View>
 
       {/* TÍTULO ATUALIZADO */}
-      <Text className="text-white text-xl font-bold mb-4">Nossos Profissionais Barbeiros(as)</Text>
+      <Text className="text-white text-xl font-bold mb-4">Nossos Barbeiros(as)</Text>
 
       <FlatList
         data={barbers}

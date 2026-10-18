@@ -4,27 +4,29 @@ import { useFocusEffect } from '@react-navigation/native';
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import * as Clipboard from 'expo-clipboard';
 
 export default function Booking({ route, navigation }: any) {
-  // ATENÇÃO: O 'service' aqui agora é aquele objeto agrupado que montamos na tela anterior
   const { barber, service } = route.params;
   
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   
-  const [userData, setUserData] = useState<{nome: string, telefone: string} | null>(null);
+  // Controle do Pix (Fase 4)
+  const [pixConfirmado, setPixConfirmado] = useState(false);
+  const valorEntrada = service.preco * 0.5;
 
+  const [userData, setUserData] = useState<{nome: string, telefone: string} | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyTimes, setBusyTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
-
   const [monthOffset, setMonthOffset] = useState(0); 
 
   const paymentOptions = [
-    { id: 'dinheiro', label: '💵 Dinheiro' },
-    { id: 'pix', label: '💠 Pix' },
-    { id: 'cartao', label: '💳 Cartão' },
+    { id: 'dinheiro', label: '💵 Dinheiro no Local' },
+    { id: 'pix', label: '💠 Pix (50% Entrada)' },
+    { id: 'cartao', label: '💳 Cartão no Local' },
   ];
 
   const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
@@ -38,7 +40,6 @@ export default function Booking({ route, navigation }: any) {
   const generateDatesForMonth = (offset: number) => {
     const dates = [];
     const today = new Date();
-    
     const targetMonthDate = new Date(today.getFullYear(), today.getMonth() + offset, 1);
     
     let startDate = offset === 0 ? today : targetMonthDate;
@@ -71,14 +72,9 @@ export default function Booking({ route, navigation }: any) {
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
-            setUserData({
-              nome: userSnap.data().nome,
-              telefone: userSnap.data().telefone
-            });
+            setUserData({ nome: userSnap.data().nome, telefone: userSnap.data().telefone });
           }
-        } catch (error) {
-          console.log("Erro ao buscar dados do cliente:", error);
-        }
+        } catch (error) { console.log("Erro ao buscar dados do cliente:", error); }
       }
     }
     fetchUserData();
@@ -106,11 +102,8 @@ export default function Booking({ route, navigation }: any) {
         const querySnapshot = await getDocs(q);
         const times = querySnapshot.docs.map(doc => doc.data().horario);
         setBusyTimes(times);
-    } catch (error) {
-        console.log("Erro", error);
-    } finally {
-        setLoadingTimes(false);
-    }
+    } catch (error) { console.log("Erro", error); } 
+    finally { setLoadingTimes(false); }
   }
 
   const forceOpenWeb = (url: string) => {
@@ -126,8 +119,13 @@ export default function Booking({ route, navigation }: any) {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
     
-    // Mensagem agora vai enviar "Corte + Barba" se foram múltiplos
-    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()} (R$ ${service.preco.toFixed(2)})`;
+    // Formata a mensagem com base no pagamento
+    let infoPagamento = `💰 Pagamento: ${method.toUpperCase()} no Local`;
+    if (method === 'pix') {
+        infoPagamento = `💠 Pagamento: PIX (Entrada de R$ ${valorEntrada.toFixed(2)} PAGA ✅)`;
+    }
+
+    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n${infoPagamento}`;
     
     if (Platform.OS === 'web') {
         const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -136,15 +134,21 @@ export default function Booking({ route, navigation }: any) {
         const urlMobile = `whatsapp://send?text=${encodeURIComponent(message)}`;
         try {
             const supported = await Linking.canOpenURL(urlMobile);
-            if (supported) {
-                await Linking.openURL(urlMobile);
-            } else {
+            if (supported) { await Linking.openURL(urlMobile); } 
+            else {
                 const urlFallback = `https://wa.me/?text=${encodeURIComponent(message)}`;
                 await Linking.openURL(urlFallback);
             }
-        } catch (error) {
-            console.log("Erro zap", error);
-        }
+        } catch (error) { console.log("Erro zap", error); }
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (barber.chavePix) {
+        await Clipboard.setStringAsync(barber.chavePix);
+        alertOrConfirm("Copiado!", "Chave Pix copiada para a área de transferência.");
+    } else {
+        alertOrConfirm("Aviso", "O barbeiro não cadastrou uma chave Pix.");
     }
   };
 
@@ -158,7 +162,7 @@ export default function Booking({ route, navigation }: any) {
       return;
     }
     if (!userData) {
-      alertOrConfirm("Atenção", "Dados do usuário não carregados. Faça login novamente se o problema persistir.");
+      alertOrConfirm("Atenção", "Dados do usuário não carregados. Faça login novamente.");
       return;
     }
 
@@ -182,16 +186,15 @@ export default function Booking({ route, navigation }: any) {
         barbeiroId: barber.id,
         barbeiroNome: barber.nome,
         barbeiroFoto: barber.foto,
-        
-        // Salvamos o agrupamento para o Admin ver "Corte + Barba" de forma fácil no Caixa
         servicoId: service.id,
         servicoNome: service.nome,
         preco: service.preco,
         duracao: service.duracao,
-        
         data: selectedDate,
         horario: selectedTime,
         metodoPagamento: paymentMethod,
+        // Registra se a entrada já foi paga no Pix
+        entradaPaga: paymentMethod === 'pix' ? true : false,
         status: 'agendado',
         shopId: shopId,
         shopName: shopName,
@@ -218,7 +221,6 @@ export default function Booking({ route, navigation }: any) {
             ]
           );
       }
-
     } catch (error) {
       console.log("Erro", error);
       alertOrConfirm("Erro", "Não foi possível agendar.");
@@ -231,6 +233,14 @@ export default function Booking({ route, navigation }: any) {
       if (Platform.OS === 'web') alert(`${title}\n${msg}`);
       else Alert.alert(title, msg);
   }
+
+  // Determina se o botão final deve estar habilitado
+  const isButtonEnabled = () => {
+      if (loading || !selectedDate || !selectedTime || !paymentMethod || !userData) return false;
+      // Se for pix, obriga a confirmar o pagamento primeiro
+      if (paymentMethod === 'pix' && !pixConfirmado) return false;
+      return true;
+  };
 
   return (
     <FlatList
@@ -336,29 +346,57 @@ export default function Booking({ route, navigation }: any) {
                 )}
             </View>
 
-            <Text className="text-white text-lg font-bold mb-3">Pagamento no Local</Text>
-            <View className="flex-row justify-between mb-8">
+            <Text className="text-white text-lg font-bold mb-3">Forma de Pagamento</Text>
+            <View className="flex-row justify-between mb-4">
                 {paymentOptions.map((option) => (
                 <TouchableOpacity
                     key={option.id}
-                    onPress={() => setPaymentMethod(option.id)}
+                    onPress={() => {
+                        setPaymentMethod(option.id);
+                        // Reseta a confirmação do pix caso troque de método
+                        setPixConfirmado(false);
+                    }}
                     className={`flex-1 p-3 mx-1 rounded-xl items-center border ${
                     paymentMethod === option.id
                     ? 'bg-orange-500 border-orange-500'
                     : 'bg-zinc-800 border-zinc-700'
                     }`}
                 >
-                    <Text className={`font-bold ${paymentMethod === option.id ? 'text-white' : 'text-zinc-400'}`}>
+                    <Text className={`font-bold text-center ${paymentMethod === option.id ? 'text-white' : 'text-zinc-400'}`}>
                     {option.label}
                     </Text>
                 </TouchableOpacity>
                 ))}
             </View>
 
+            {/* SEÇÃO CONDICIONAL: APARECE SÓ SE ESCOLHER PIX */}
+            {paymentMethod === 'pix' && (
+                <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                    <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% de entrada.</Text>
+                    <Text className="text-orange-500 font-bold text-xl mb-4">Valor: R$ {valorEntrada.toFixed(2)}</Text>
+                    
+                    <Text className="text-zinc-400 text-sm mb-1">Chave Pix do Barbeiro:</Text>
+                    <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-4">
+                        <Text className="text-white font-bold">{barber.chavePix || "Chave não cadastrada"}</Text>
+                        <TouchableOpacity onPress={copyToClipboard} className="bg-zinc-700 px-3 py-1 rounded">
+                            <Text className="text-white text-xs">Copiar</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Botão de confirmação manual pelo cliente */}
+                    <TouchableOpacity 
+                        onPress={() => setPixConfirmado(true)}
+                        className={`p-3 rounded-lg items-center ${pixConfirmado ? 'bg-green-600' : 'bg-zinc-700'}`}
+                    >
+                        <Text className="text-white font-bold">{pixConfirmado ? "✅ Entrada Paga!" : "Já fiz o pagamento"}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <TouchableOpacity 
-                className={`p-4 rounded-xl items-center mb-20 ${(!selectedDate || !selectedTime || !paymentMethod || !userData) ? 'bg-zinc-700' : 'bg-orange-500'}`}
+                className={`p-4 rounded-xl items-center mb-20 ${isButtonEnabled() ? 'bg-orange-500' : 'bg-zinc-700'}`}
                 onPress={handleConfirmBooking}
-                disabled={loading || !selectedDate || !selectedTime || !paymentMethod || !userData}
+                disabled={!isButtonEnabled()}
             >
                 {loading ? (
                 <ActivityIndicator color="#fff" />
