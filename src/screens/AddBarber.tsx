@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Image, Platform } from 'react-native';
-import { db, storage } from '../config/firebase'; 
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { db } from '../config/firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
-import * as ImagePicker from 'expo-image-picker'; 
 
 export default function AddBarber({ navigation, route }: any) {
   const [nome, setNome] = useState('');
   const [especialidade, setEspecialidade] = useState('');
   const [chavePix, setChavePix] = useState('');
-  
-  const [fotoExistente, setFotoExistente] = useState("https://cdn-icons-png.flaticon.com/512/1995/1995515.png");
-  const [novaFotoUri, setNovaFotoUri] = useState<string | null>(null);
+  const [foto, setFoto] = useState(''); 
 
   const [loading, setLoading] = useState(false);
 
@@ -32,53 +28,9 @@ export default function AddBarber({ navigation, route }: any) {
       setNome(barberToEdit.nome);
       setEspecialidade(barberToEdit.especialidade);
       setChavePix(barberToEdit.chavePix || '');
-      if (barberToEdit.foto) setFotoExistente(barberToEdit.foto);
+      setFoto(barberToEdit.foto || '');
     }
   }, [barberToEdit]);
-
-  const pickImage = async () => {
-    try {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, 
-        aspect: [1, 1], 
-        quality: 0.5, 
-      });
-
-      if (!result.canceled) {
-        setNovaFotoUri(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.log("Erro ao abrir a galeria:", error);
-      Alert.alert("Erro", "Não foi possível acessar a galeria.");
-    }
-  };
-
-  // Função de upload com limite de tempo (timeout) de 5 segundos
-  async function uploadImageAsync(uri: string) {
-    return new Promise(async (resolve) => {
-      // Cria um timer que desiste após 5 segundos
-      const timeout = setTimeout(() => {
-        console.warn("Upload demorou muito e foi cancelado.");
-        resolve(null);
-      }, 5000);
-
-      try {
-        const response = await fetch(uri);
-        const blob = await response.blob(); 
-        const fileRef = ref(storage, `barbeiros/foto_${Date.now()}.jpg`); 
-        
-        await uploadBytes(fileRef, blob); 
-        const url = await getDownloadURL(fileRef);
-        clearTimeout(timeout);
-        resolve(url);
-      } catch (error) {
-        console.error("Erro no upload da imagem:", error);
-        clearTimeout(timeout);
-        resolve(null);
-      }
-    });
-  }
 
   async function handleSave() {
     if (nome === '' || especialidade === '') {
@@ -97,22 +49,11 @@ export default function AddBarber({ navigation, route }: any) {
         return;
       }
 
-      let urlFinalDaFoto = fotoExistente;
-
-      if (novaFotoUri) {
-        const uploadUrl = await uploadImageAsync(novaFotoUri);
-        if (uploadUrl) {
-            urlFinalDaFoto = uploadUrl as string;
-        } else {
-            console.warn("Salvando dados do barbeiro sem atualizar a imagem.");
-        }
-      }
-
       const dataToSave = {
         nome: nome,
         especialidade: especialidade,
-        foto: urlFinalDaFoto, 
-        chavePix: chavePix
+        foto: foto || "https://cdn-icons-png.flaticon.com/512/1995/1995515.png",
+        chavePix: chavePix 
       };
 
       if (isEditing) {
@@ -169,26 +110,21 @@ export default function AddBarber({ navigation, route }: any) {
 
       <Text className="text-zinc-400 mb-2">Chave Pix do Barbeiro (Para receber 50%)</Text>
       <TextInput 
-        className="bg-zinc-800 text-white p-4 rounded-xl mb-6 border border-zinc-700"
+        className="bg-zinc-800 text-white p-4 rounded-xl mb-4 border border-zinc-700"
         placeholder="CPF, Email, Telefone ou Aleatória"
         placeholderTextColor="#71717a"
         value={chavePix}
         onChangeText={setChavePix}
       />
 
-      <Text className="text-zinc-400 mb-2">Foto de Perfil</Text>
-      <View className="flex-row items-center mb-8">
-          <Image 
-              source={{ uri: novaFotoUri || fotoExistente }} 
-              className="w-16 h-16 rounded-full border-2 border-orange-500 mr-4 bg-zinc-800"
-          />
-          <TouchableOpacity 
-              onPress={pickImage}
-              className="bg-zinc-800 px-4 py-4 rounded-xl border border-zinc-700 flex-1 flex-row items-center justify-center"
-          >
-              <Text className="text-white font-bold text-base">📷 Escolher da Galeria</Text>
-          </TouchableOpacity>
-      </View>
+      <Text className="text-zinc-400 mb-2">Link da Foto (URL)</Text>
+      <TextInput 
+        className="bg-zinc-800 text-white p-4 rounded-xl mb-6 border border-zinc-700"
+        placeholder="Cole o link da imagem aqui (opcional)"
+        placeholderTextColor="#71717a"
+        value={foto}
+        onChangeText={setFoto}
+      />
 
       <TouchableOpacity 
         className="bg-orange-500 p-4 rounded-xl items-center"
@@ -199,7 +135,7 @@ export default function AddBarber({ navigation, route }: any) {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text className="text-white font-bold text-lg">
-             {isEditing ? '💾 Atualizar Barbeiro' : '💾 Salvar'}
+             {isEditing ? '💾 Atualizar Barbeiro' : '💾 Salvar Barbeiro'}
           </Text>
         )}
       </TouchableOpacity>

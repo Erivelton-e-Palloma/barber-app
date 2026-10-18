@@ -11,9 +11,9 @@ export default function Booking({ route, navigation }: any) {
   
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   
-  // Controle do Pix (Fase 4)
+  // Pix é o único método agora
+  const paymentMethod = 'pix';
   const [pixConfirmado, setPixConfirmado] = useState(false);
   const valorEntrada = service.preco * 0.5;
 
@@ -22,12 +22,6 @@ export default function Booking({ route, navigation }: any) {
   const [busyTimes, setBusyTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0); 
-
-  const paymentOptions = [
-    { id: 'dinheiro', label: '💵 Dinheiro no Local' },
-    { id: 'pix', label: '💠 Pix (50% Entrada)' },
-    { id: 'cartao', label: '💳 Cartão no Local' },
-  ];
 
   const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 
@@ -115,16 +109,11 @@ export default function Booking({ route, navigation }: any) {
     document.body.removeChild(link);
   };
 
-  const openWhatsAppToBarber = async (date: string, time: string, method: string) => {
+  const openWhatsAppToBarber = async (date: string, time: string) => {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
     
-    // Formata a mensagem com base no pagamento
-    let infoPagamento = `💰 Pagamento: ${method.toUpperCase()} no Local`;
-    if (method === 'pix') {
-        infoPagamento = `💠 Pagamento: PIX (Entrada de R$ ${valorEntrada.toFixed(2)} PAGA ✅)`;
-    }
-
+    const infoPagamento = `💠 Pagamento: PIX (Entrada de R$ ${valorEntrada.toFixed(2)} PAGA ✅)`;
     const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n${infoPagamento}`;
     
     if (Platform.OS === 'web') {
@@ -155,10 +144,6 @@ export default function Booking({ route, navigation }: any) {
   async function handleConfirmBooking() {
     if (!selectedDate || !selectedTime) {
       alertOrConfirm("Atenção", "Selecione um dia e um horário!");
-      return;
-    }
-    if (!paymentMethod) {
-      alertOrConfirm("Atenção", "Selecione a forma de pagamento!");
       return;
     }
     if (!userData) {
@@ -193,8 +178,7 @@ export default function Booking({ route, navigation }: any) {
         data: selectedDate,
         horario: selectedTime,
         metodoPagamento: paymentMethod,
-        // Registra se a entrada já foi paga no Pix
-        entradaPaga: paymentMethod === 'pix' ? true : false,
+        entradaPaga: true,
         status: 'agendado',
         shopId: shopId,
         shopName: shopName,
@@ -204,7 +188,7 @@ export default function Booking({ route, navigation }: any) {
       if (Platform.OS === 'web') {
           const confirmText = "Agendamento Confirmado! ✅\n\nDeseja enviar o comprovante para o barbeiro no WhatsApp?\n\n[OK] = Sim, Enviar Zap\n[Cancelar] = Não, obrigado";
           if (window.confirm(confirmText)) {
-              openWhatsAppToBarber(selectedDate, selectedTime, paymentMethod);
+              openWhatsAppToBarber(selectedDate, selectedTime);
           }
           navigation.navigate('Home');
       } else {
@@ -214,7 +198,7 @@ export default function Booking({ route, navigation }: any) {
             [
               { text: "Não, obrigado", onPress: () => navigation.navigate('Home') },
               { text: "Sim, Enviar no Zap 💬", onPress: () => {
-                  openWhatsAppToBarber(selectedDate, selectedTime, paymentMethod);
+                  openWhatsAppToBarber(selectedDate, selectedTime);
                   navigation.navigate('Home');
                 }
               }
@@ -234,11 +218,8 @@ export default function Booking({ route, navigation }: any) {
       else Alert.alert(title, msg);
   }
 
-  // Determina se o botão final deve estar habilitado
   const isButtonEnabled = () => {
-      if (loading || !selectedDate || !selectedTime || !paymentMethod || !userData) return false;
-      // Se for pix, obriga a confirmar o pagamento primeiro
-      if (paymentMethod === 'pix' && !pixConfirmado) return false;
+      if (loading || !selectedDate || !selectedTime || !userData || !pixConfirmado) return false;
       return true;
   };
 
@@ -276,7 +257,6 @@ export default function Booking({ route, navigation }: any) {
             </View>
 
             <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
-            
             <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
                 <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
                     <Text className={monthOffset === 0 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"← Atual"}</Text>
@@ -346,52 +326,26 @@ export default function Booking({ route, navigation }: any) {
                 )}
             </View>
 
-            <Text className="text-white text-lg font-bold mb-3">Forma de Pagamento</Text>
-            <View className="flex-row justify-between mb-4">
-                {paymentOptions.map((option) => (
-                <TouchableOpacity
-                    key={option.id}
-                    onPress={() => {
-                        setPaymentMethod(option.id);
-                        // Reseta a confirmação do pix caso troque de método
-                        setPixConfirmado(false);
-                    }}
-                    className={`flex-1 p-3 mx-1 rounded-xl items-center border ${
-                    paymentMethod === option.id
-                    ? 'bg-orange-500 border-orange-500'
-                    : 'bg-zinc-800 border-zinc-700'
-                    }`}
-                >
-                    <Text className={`font-bold text-center ${paymentMethod === option.id ? 'text-white' : 'text-zinc-400'}`}>
-                    {option.label}
-                    </Text>
-                </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* SEÇÃO CONDICIONAL: APARECE SÓ SE ESCOLHER PIX */}
-            {paymentMethod === 'pix' && (
-                <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
-                    <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% de entrada.</Text>
-                    <Text className="text-orange-500 font-bold text-xl mb-4">Valor: R$ {valorEntrada.toFixed(2)}</Text>
-                    
-                    <Text className="text-zinc-400 text-sm mb-1">Chave Pix do Barbeiro:</Text>
-                    <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-4">
-                        <Text className="text-white font-bold">{barber.chavePix || "Chave não cadastrada"}</Text>
-                        <TouchableOpacity onPress={copyToClipboard} className="bg-zinc-700 px-3 py-1 rounded">
-                            <Text className="text-white text-xs">Copiar</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Botão de confirmação manual pelo cliente */}
-                    <TouchableOpacity 
-                        onPress={() => setPixConfirmado(true)}
-                        className={`p-3 rounded-lg items-center ${pixConfirmado ? 'bg-green-600' : 'bg-zinc-700'}`}
-                    >
-                        <Text className="text-white font-bold">{pixConfirmado ? "✅ Entrada Paga!" : "Já fiz o pagamento"}</Text>
+            <Text className="text-white text-lg font-bold mb-3">Pagamento da Entrada</Text>
+            <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% do serviço via Pix.</Text>
+                <Text className="text-orange-500 font-bold text-xl mb-4">Valor: R$ {valorEntrada.toFixed(2)}</Text>
+                
+                <Text className="text-zinc-400 text-sm mb-1">Chave Pix do Barbeiro:</Text>
+                <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-4">
+                    <Text className="text-white font-bold">{barber.chavePix || "Chave não cadastrada"}</Text>
+                    <TouchableOpacity onPress={copyToClipboard} className="bg-zinc-700 px-3 py-1 rounded">
+                        <Text className="text-white text-xs">Copiar</Text>
                     </TouchableOpacity>
                 </View>
-            )}
+
+                <TouchableOpacity 
+                    onPress={() => setPixConfirmado(true)}
+                    className={`p-3 rounded-lg items-center ${pixConfirmado ? 'bg-green-600' : 'bg-zinc-700'}`}
+                >
+                    <Text className="text-white font-bold">{pixConfirmado ? "✅ Entrada Paga!" : "Já fiz o pagamento no banco"}</Text>
+                </TouchableOpacity>
+            </View>
 
             <TouchableOpacity 
                 className={`p-4 rounded-xl items-center mb-20 ${isButtonEnabled() ? 'bg-orange-500' : 'bg-zinc-700'}`}

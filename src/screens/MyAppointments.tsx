@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import { db, auth } from '../config/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function MyAppointments({ navigation }: any) {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Estado para sabermos se quem está logado é o Dono da Barbearia
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   async function fetchAppointments() {
     setLoading(true);
@@ -19,11 +22,38 @@ export default function MyAppointments({ navigation }: any) {
           return;
       }
 
-      const q = query(
-        collection(db, "agendamentos"),
-        where("clienteId", "==", user.uid),
-        where("shopId", "==", shopId) 
-      );
+      // 1. A NOVA VERIFICAÇÃO INTELIGENTE (Pelo Painel de Super Admin)
+      let userIsAdmin = false;
+      
+      // Busca os dados da Barbearia atual
+      const shopRef = doc(db, "barbearias", shopId);
+      const shopSnap = await getDoc(shopRef);
+
+      if (shopSnap.exists()) {
+          const shopData = shopSnap.data();
+          // Verifica se o email logado é igual ao emailDono cadastrado no seu Painel Super Admin
+          if (user.email === shopData.emailDono) {
+              userIsAdmin = true;
+          }
+      }
+      setIsSuperAdmin(userIsAdmin);
+
+      // 2. MONTA A BUSCA BASEADA NA PERMISSÃO
+      let q;
+      if (userIsAdmin) {
+          // VISAO DO DONO: Puxa TODOS os agendamentos da loja dele
+          q = query(
+            collection(db, "agendamentos"),
+            where("shopId", "==", shopId) 
+          );
+      } else {
+          // VISAO DO CLIENTE: Puxa APENAS os agendamentos que têm o ID dele
+          q = query(
+            collection(db, "agendamentos"),
+            where("shopId", "==", shopId),
+            where("clienteId", "==", user.uid)
+          );
+      }
 
       const querySnapshot = await getDocs(q);
       const list = querySnapshot.docs.map(doc => ({
@@ -31,7 +61,7 @@ export default function MyAppointments({ navigation }: any) {
         ...doc.data()
       }));
 
-      // Ordenação
+      // Ordena por data e horário
       list.sort((a: any, b: any) => {
         if (a.data !== b.data) {
             return a.data.localeCompare(b.data);
@@ -51,16 +81,11 @@ export default function MyAppointments({ navigation }: any) {
     fetchAppointments();
   }, []);
 
-  // --- FUNÇÃO DE CANCELAR REFORÇADA ---
   async function confirmAndCancel(id: string) {
       try {
-          // 1. Apaga do Banco de Dados primeiro
           await deleteDoc(doc(db, "agendamentos", id));
-          
-          // 2. Tira da tela do cliente
           setAppointments(prev => prev.filter(item => item.id !== id));
           
-          // 3. Confirmação de que o horário foi liberado
           if (Platform.OS === 'web') {
               alert("✅ Agendamento cancelado com sucesso! O horário já está disponível novamente.");
           } else {
@@ -107,7 +132,9 @@ export default function MyAppointments({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
           <Text className="text-orange-500 text-lg font-bold">← Voltar</Text>
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">Meus Agendamentos</Text>
+        <Text className="text-white text-2xl font-bold">
+            {isSuperAdmin ? 'Gestão da Barbearia' : 'Meus Agendamentos'}
+        </Text>
       </View>
 
       {loading ? (
@@ -120,16 +147,30 @@ export default function MyAppointments({ navigation }: any) {
           renderItem={({ item }) => (
             <View className="bg-zinc-800 p-4 rounded-xl mb-4 border border-zinc-700">
               <View className="flex-row justify-between items-start mb-2">
-                <View>
+                <View className="flex-1 pr-2">
                   <Text className="text-orange-500 font-bold text-lg">{item.servicoNome}</Text>
-                  <Text className="text-zinc-400">Barbeiro: {item.barbeiroNome}</Text>
+                  
+                  {/* SE FOR ADMIN, MOSTRA OS DADOS DO CLIENTE */}
+                  {isSuperAdmin && (
+                      <View className="mt-1 bg-zinc-900/50 p-2 rounded border border-zinc-700">
+                          <Text className="text-white font-bold text-sm">Cliente: {item.clienteNome || 'Não informado'}</Text>
+                          <Text className="text-zinc-400 text-xs">WhatsApp: {item.clienteTelefone || 'N/A'}</Text>
+                      </View>
+                  )}
+                  
+                  <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
                 </View>
-                <Text className="text-white font-bold text-xl">
-                  R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
-                </Text>
+                <View className="items-end">
+                    <Text className="text-white font-bold text-xl">
+                    R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
+                    </Text>
+                    {item.entradaPaga && (
+                        <Text className="text-green-500 font-bold text-xs mt-1">✅ 50% no Pix</Text>
+                    )}
+                </View>
               </View>
 
-              <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start">
+              <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2">
                 <Text className="text-white font-bold mr-2">📅 {formatDate(item.data)}</Text>
                 <Text className="text-white font-bold">⏰ {item.horario}</Text>
               </View>
@@ -143,7 +184,7 @@ export default function MyAppointments({ navigation }: any) {
             </View>
           )}
           ListEmptyComponent={() => (
-            <Text className="text-zinc-500 text-center mt-10">Você não tem agendamentos nesta barbearia.</Text>
+            <Text className="text-zinc-500 text-center mt-10">Nenhum agendamento encontrado.</Text>
           )}
         />
       )}
