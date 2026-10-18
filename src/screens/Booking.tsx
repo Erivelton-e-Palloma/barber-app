@@ -6,13 +6,13 @@ import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function Booking({ route, navigation }: any) {
+  // ATENÇÃO: O 'service' aqui agora é aquele objeto agrupado que montamos na tela anterior
   const { barber, service } = route.params;
   
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   
-  // --- NOVO: ESTADO PARA OS DADOS DO CLIENTE ---
   const [userData, setUserData] = useState<{nome: string, telefone: string} | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -63,7 +63,6 @@ export default function Booking({ route, navigation }: any) {
 
   const dates = generateDatesForMonth(monthOffset);
 
-  // --- NOVO: BUSCAR DADOS DO CLIENTE LOGADO ---
   useEffect(() => {
     async function fetchUserData() {
       if (auth.currentUser) {
@@ -127,8 +126,8 @@ export default function Booking({ route, navigation }: any) {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
     
-    // NOME AGORA VEM AUTOMÁTICO DO BANCO DE DADOS
-    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()}`;
+    // Mensagem agora vai enviar "Corte + Barba" se foram múltiplos
+    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()} (R$ ${service.preco.toFixed(2)})`;
     
     if (Platform.OS === 'web') {
         const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -158,7 +157,6 @@ export default function Booking({ route, navigation }: any) {
       alertOrConfirm("Atenção", "Selecione a forma de pagamento!");
       return;
     }
-    // VALIDAÇÃO: Garante que os dados do usuário carregaram
     if (!userData) {
       alertOrConfirm("Atenção", "Dados do usuário não carregados. Faça login novamente se o problema persistir.");
       return;
@@ -179,15 +177,18 @@ export default function Booking({ route, navigation }: any) {
       await addDoc(collection(db, "agendamentos"), {
         clienteId: auth.currentUser?.uid,
         clienteEmail: auth.currentUser?.email,
-        clienteNome: userData.nome, // <--- Puxa automático!
-        clienteTelefone: userData.telefone, // <--- Puxa automático!
+        clienteNome: userData.nome, 
+        clienteTelefone: userData.telefone, 
         barbeiroId: barber.id,
         barbeiroNome: barber.nome,
         barbeiroFoto: barber.foto,
+        
+        // Salvamos o agrupamento para o Admin ver "Corte + Barba" de forma fácil no Caixa
         servicoId: service.id,
         servicoNome: service.nome,
         preco: service.preco,
         duracao: service.duracao,
+        
         data: selectedDate,
         horario: selectedTime,
         metodoPagamento: paymentMethod,
@@ -247,13 +248,12 @@ export default function Booking({ route, navigation }: any) {
             </View>
 
             <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
-                <Text className="text-zinc-400">Serviço Escolhido:</Text>
+                <Text className="text-zinc-400">Serviços Escolhidos:</Text>
                 <Text className="text-white text-xl font-bold">{service.nome}</Text>
-                <Text className="text-orange-500 font-bold">R$ {service.preco?.toFixed(2)} • {service.duracao} min</Text>
+                <Text className="text-orange-500 font-bold">R$ {service.preco?.toFixed(2)} • {service.duracao} min totais</Text>
                 <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
             </View>
 
-            {/* NOVO: CARD DE INFORMAÇÕES AUTOMÁTICAS DO CLIENTE */}
             <Text className="text-white text-lg font-bold mb-2">Seus Dados</Text>
             <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700 flex-row items-center">
                 <View className="bg-orange-500 w-10 h-10 rounded-full items-center justify-center mr-3">

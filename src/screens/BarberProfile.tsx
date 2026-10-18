@@ -10,7 +10,8 @@ export default function BarberProfile({ route, navigation }: any) {
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [selectedService, setSelectedService] = useState<any>(null);
+  // --- MUDANÇA AQUI: Agora é um ARRAY de serviços selecionados ---
+  const [selectedServices, setSelectedServices] = useState<any[]>([]);
 
   function showAlert(title: string, msg: string) {
       if (Platform.OS === 'web') alert(`${title}\n${msg}`);
@@ -45,15 +46,40 @@ export default function BarberProfile({ route, navigation }: any) {
     fetchServices();
   }, []);
 
+  // --- LÓGICA DE TOGGLE (Adicionar/Remover do Carrinho) ---
+  const toggleService = (item: any) => {
+    const isAlreadySelected = selectedServices.some(s => s.id === item.id);
+    if (isAlreadySelected) {
+        // Se já tem, tira da lista
+        setSelectedServices(selectedServices.filter(s => s.id !== item.id));
+    } else {
+        // Se não tem, adiciona na lista
+        setSelectedServices([...selectedServices, item]);
+    }
+  };
+
   function handleBooking() {
-    if (!selectedService) {
-      showAlert("Ops!", "Selecione um serviço para continuar.");
+    if (selectedServices.length === 0) {
+      showAlert("Ops!", "Selecione pelo menos um serviço para continuar.");
       return;
     }
     
+    // Calcula totais para passar pra próxima tela
+    const totalPrice = selectedServices.reduce((sum, item) => sum + Number(item.preco), 0);
+    const totalDuration = selectedServices.reduce((sum, item) => sum + Number(item.duracao), 0);
+    // Cria uma string combinada com os nomes (ex: "Corte + Barba")
+    const combinedNames = selectedServices.map(s => s.nome).join(' + ');
+
     navigation.navigate('Booking', { 
       barber: barber, 
-      service: selectedService 
+      // Enviamos um objeto "service" fake agrupando os totais para a próxima tela
+      service: {
+          id: combinedNames,
+          nome: combinedNames,
+          preco: totalPrice,
+          duracao: totalDuration,
+          originalList: selectedServices // Mandamos a lista original se precisar no futuro
+      }
     });
   }
 
@@ -61,29 +87,29 @@ export default function BarberProfile({ route, navigation }: any) {
     return Number(value).toFixed(2).replace('.', ',');
   };
 
+  // --- CÁLCULO PARA MOSTRAR NO BOTÃO FLUTUANTE ---
+  const totalCartPrice = selectedServices.reduce((sum, item) => sum + Number(item.preco), 0);
+  const totalCartDuration = selectedServices.reduce((sum, item) => sum + Number(item.duracao), 0);
+
   return (
     <View className="flex-1 bg-zinc-900">
-      {/* CABEÇALHO DO BARBEIRO ATUALIZADO */}
       <View className="items-center pt-12 pb-6 bg-zinc-800 rounded-b-3xl shadow-lg">
         <Image source={{ uri: barber.foto }} className="w-32 h-32 rounded-full border-2 border-orange-500 mb-4" />
         <Text className="text-white text-2xl font-bold">{barber.nome}</Text>
         <Text className="text-zinc-400 text-lg">{barber.especialidade}</Text>
         
-        {/* MENSAGEM NOVA PARA INSTRUIR O CLIENTE */}
         <Text className="text-orange-500 text-sm font-bold mt-2 animate-pulse">
-           👇 Toque em um serviço abaixo para agendar
+           👇 Toque nos serviços abaixo para agendar
         </Text>
         
         <Text className="text-orange-400 font-bold mt-2">⭐ {barber.nota || "5.0"} • 120 Avaliações</Text>
       </View>
 
-      {/* BLOCO DO ENDEREÇO DA LOJA */}
       <View className="px-6 mt-6 mb-2">
         <View className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700">
             <Text className="text-2xl mr-3">📍</Text>
             <View>
                 <Text className="text-white font-bold">Localização</Text>
-                {/* O Endereço fixo que depois puxaremos do banco */}
                 <Text className="text-zinc-400 text-sm mt-1">Av. Apolônio Sales, 1049 - Paulo Afonso</Text>
             </View>
         </View>
@@ -98,13 +124,14 @@ export default function BarberProfile({ route, navigation }: any) {
           data={services}
           keyExtractor={(item) => item.id}
           className="px-6"
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 150 }}
           renderItem={({ item }) => {
-            const isSelected = selectedService?.id === item.id;
+            // Verifica se o item atual está no array de selecionados
+            const isSelected = selectedServices.some(s => s.id === item.id);
             
             return (
               <TouchableOpacity 
-                onPress={() => setSelectedService(item)}
+                onPress={() => toggleService(item)}
                 className={`p-4 rounded-xl mb-3 flex-row justify-between items-center border 
                   ${isSelected ? 'bg-zinc-700 border-orange-500' : 'bg-zinc-800 border-zinc-700'}`}
               >
@@ -115,7 +142,11 @@ export default function BarberProfile({ route, navigation }: any) {
                   <Text className="text-zinc-400 text-sm">🕒 {item.duracao} min</Text>
                 </View>
                 
-                <Text className="text-orange-500 text-lg font-bold">R$ {formatPrice(item.preco)}</Text>
+                <View className="flex-row items-center">
+                    <Text className="text-orange-500 text-lg font-bold mr-2">R$ {formatPrice(item.preco)}</Text>
+                    {/* O Checkmark que mostra que está selecionado */}
+                    {isSelected && <Text className="text-orange-500 text-lg">✅</Text>}
+                </View>
               </TouchableOpacity>
             )
           }}
@@ -127,8 +158,14 @@ export default function BarberProfile({ route, navigation }: any) {
         />
       )}
       
-      {selectedService && (
+      {/* Botão flutuante dinâmico */}
+      {selectedServices.length > 0 && (
         <View className="p-6 absolute bottom-0 w-full bg-zinc-900/95 border-t border-zinc-800">
+          <View className="flex-row justify-between mb-3 px-2">
+              <Text className="text-white font-bold">Total ({selectedServices.length} itens)</Text>
+              <Text className="text-orange-500 font-bold">R$ {formatPrice(totalCartPrice)} • {totalCartDuration} min</Text>
+          </View>
+
           <TouchableOpacity 
             onPress={handleBooking}
             className="bg-orange-500 p-4 rounded-xl items-center shadow-lg"
