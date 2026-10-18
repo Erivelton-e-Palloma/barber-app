@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Linking, TextInput, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native'; // <--- Importação nova!
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
@@ -52,11 +53,14 @@ export default function Booking({ route, navigation }: any) {
 
   const dates = generateDates();
 
-  useEffect(() => {
-    if (selectedDate) {
+  // --- FORÇA A ATUALIZAÇÃO SEMPRE QUE A TELA ABRIR (Resolve o bug do horário fantasma) ---
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedDate) {
         checkAvailability(selectedDate);
-    }
-  }, [selectedDate]);
+      }
+    }, [selectedDate])
+  );
 
   async function checkAvailability(date: string) {
     setLoadingTimes(true);
@@ -81,33 +85,44 @@ export default function Booking({ route, navigation }: any) {
     }
   }
 
-  // --- TRUQUE PARA ABRIR O WHATSAPP NA WEB ---
   const forceOpenWeb = (url: string) => {
     const link = document.createElement('a');
     link.href = url;
-    link.target = '_blank'; // Abre em nova aba
+    link.target = '_blank'; 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const openWhatsAppToBarber = (date: string, time: string, method: string) => {
+  // --- SOLUÇÃO DO WHATSAPP PARA IPHONE E ANDROID ---
+  const openWhatsAppToBarber = async (date: string, time: string, method: string) => {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
     
-    // FORMATANDO A MENSAGEM DO JEITO QUE VOCÊ QUER
-    const message = `Olá *${barber.nome}*! Sou *${clientName}* 👋\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()}`;
-    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-
+    const message = `Olá *${barber.nome}*! Sou *${clientName}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()}`;
+    
     if (Platform.OS === 'web') {
-        forceOpenWeb(url);
+        const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        forceOpenWeb(urlWeb);
     } else {
-        Linking.openURL(url);
+        // Deep Link Nativo: Força o iPhone/Android a pular o navegador e abrir o App direto
+        const urlMobile = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        try {
+            const supported = await Linking.canOpenURL(urlMobile);
+            if (supported) {
+                await Linking.openURL(urlMobile);
+            } else {
+                // Plano B: Se não tiver o app instalado, vai pro navegador
+                const urlFallback = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                await Linking.openURL(urlFallback);
+            }
+        } catch (error) {
+            console.log("Erro ao abrir WhatsApp", error);
+        }
     }
   };
 
   async function handleConfirmBooking() {
-    // 1. Validações
     if (!selectedDate || !selectedTime) {
       alertOrConfirm("Atenção", "Selecione um dia e um horário!");
       return;
@@ -121,7 +136,6 @@ export default function Booking({ route, navigation }: any) {
         return;
     }
 
-    // 2. Validação Telefone
     const cleanPhone = clientPhone.replace(/\D/g, '');
     if (cleanPhone.length < 10) {
         alertOrConfirm("Telefone Inválido", "Por favor, digite um número de WhatsApp válido (com DDD).");
@@ -161,11 +175,8 @@ export default function Booking({ route, navigation }: any) {
         createdAt: new Date().toISOString()
       });
 
-      // 3. MENSAGEM FINAL AJUSTADA
       if (Platform.OS === 'web') {
-          // TEXTO EXATO QUE VOCÊ PEDIU
           const confirmText = "Agendamento Confirmado! ✅\n\nDeseja enviar o comprovante para o barbeiro no WhatsApp?\n\n[OK] = Sim, Enviar Zap\n[Cancelar] = Não, obrigado";
-          
           if (window.confirm(confirmText)) {
               openWhatsAppToBarber(selectedDate, selectedTime, paymentMethod);
           }

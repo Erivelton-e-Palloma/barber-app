@@ -8,7 +8,6 @@ export default function MyAppointments({ navigation }: any) {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Função auxiliar para buscar agendamentos
   async function fetchAppointments() {
     setLoading(true);
     try {
@@ -32,7 +31,7 @@ export default function MyAppointments({ navigation }: any) {
         ...doc.data()
       }));
 
-      // --- ORDENAÇÃO (DATA + HORA) ---
+      // Ordenação
       list.sort((a: any, b: any) => {
         if (a.data !== b.data) {
             return a.data.localeCompare(b.data);
@@ -52,12 +51,21 @@ export default function MyAppointments({ navigation }: any) {
     fetchAppointments();
   }, []);
 
-  // --- FUNÇÃO DE CANCELAR CORRIGIDA (WEB & MOBILE) ---
+  // --- FUNÇÃO DE CANCELAR REFORÇADA ---
   async function confirmAndCancel(id: string) {
       try {
+          // 1. Apaga do Banco de Dados primeiro
           await deleteDoc(doc(db, "agendamentos", id));
-          // Atualiza a lista na hora
+          
+          // 2. Tira da tela do cliente
           setAppointments(prev => prev.filter(item => item.id !== id));
+          
+          // 3. Confirmação de que o horário foi liberado
+          if (Platform.OS === 'web') {
+              alert("✅ Agendamento cancelado com sucesso! O horário já está disponível novamente.");
+          } else {
+              Alert.alert("Sucesso", "Agendamento cancelado! O horário já está disponível novamente.");
+          }
       } catch (error) {
           console.log("Erro ao cancelar:", error);
           if (Platform.OS === 'web') alert("Erro ao cancelar agendamento.");
@@ -67,13 +75,11 @@ export default function MyAppointments({ navigation }: any) {
 
   function handleCancel(id: string) {
     if (Platform.OS === 'web') {
-        // WEB: Usa confirm nativo do navegador
         const confirm = window.confirm("Deseja realmente cancelar este agendamento?");
         if (confirm) {
             confirmAndCancel(id);
         }
     } else {
-        // MOBILE: Usa Alert nativo
         Alert.alert(
           "Cancelar",
           "Deseja cancelar este agendamento?",
@@ -110,7 +116,6 @@ export default function MyAppointments({ navigation }: any) {
         <FlatList
           data={appointments}
           keyExtractor={(item) => item.id}
-          // CORREÇÃO DE ESPAÇAMENTO NO FINAL DA LISTA 👇
           contentContainerStyle={{ paddingBottom: 100 }}
           renderItem={({ item }) => (
             <View className="bg-zinc-800 p-4 rounded-xl mb-4 border border-zinc-700">
