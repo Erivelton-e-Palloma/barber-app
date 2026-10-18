@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Linking, TextInput, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { db, auth } from '../config/firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore'; 
+import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function Booking({ route, navigation }: any) {
@@ -12,15 +12,14 @@ export default function Booking({ route, navigation }: any) {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   
-  const [clientName, setClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
+  // --- NOVO: ESTADO PARA OS DADOS DO CLIENTE ---
+  const [userData, setUserData] = useState<{nome: string, telefone: string} | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [busyTimes, setBusyTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
 
-  // --- NOVA LÓGICA DE MESES ---
-  const [monthOffset, setMonthOffset] = useState(0); // 0 = Mês atual, 1 = Próximo mês
+  const [monthOffset, setMonthOffset] = useState(0); 
 
   const paymentOptions = [
     { id: 'dinheiro', label: '💵 Dinheiro' },
@@ -40,7 +39,6 @@ export default function Booking({ route, navigation }: any) {
     const dates = [];
     const today = new Date();
     
-    // Define a data alvo baseada no offset (0 = hoje, 1 = dia 1 do próximo mês)
     const targetMonthDate = new Date(today.getFullYear(), today.getMonth() + offset, 1);
     
     let startDate = offset === 0 ? today : targetMonthDate;
@@ -64,6 +62,28 @@ export default function Booking({ route, navigation }: any) {
   };
 
   const dates = generateDatesForMonth(monthOffset);
+
+  // --- NOVO: BUSCAR DADOS DO CLIENTE LOGADO ---
+  useEffect(() => {
+    async function fetchUserData() {
+      if (auth.currentUser) {
+        try {
+          const userRef = doc(db, "usuarios", auth.currentUser.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            setUserData({
+              nome: userSnap.data().nome,
+              telefone: userSnap.data().telefone
+            });
+          }
+        } catch (error) {
+          console.log("Erro ao buscar dados do cliente:", error);
+        }
+      }
+    }
+    fetchUserData();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,7 +127,8 @@ export default function Booking({ route, navigation }: any) {
     const [ano, mes, dia] = date.split('-');
     const dataFormatada = `${dia}/${mes}`;
     
-    const message = `Olá *${barber.nome}*! Sou *${clientName}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()}`;
+    // NOME AGORA VEM AUTOMÁTICO DO BANCO DE DADOS
+    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n💰 Pagamento: ${method.toUpperCase()}`;
     
     if (Platform.OS === 'web') {
         const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -137,15 +158,10 @@ export default function Booking({ route, navigation }: any) {
       alertOrConfirm("Atenção", "Selecione a forma de pagamento!");
       return;
     }
-    if (clientName.trim() === '') {
-        alertOrConfirm("Atenção", "Por favor, preencha seu Nome!");
-        return;
-    }
-
-    const cleanPhone = clientPhone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-        alertOrConfirm("Telefone Inválido", "Por favor, digite um número de WhatsApp válido (com DDD).");
-        return;
+    // VALIDAÇÃO: Garante que os dados do usuário carregaram
+    if (!userData) {
+      alertOrConfirm("Atenção", "Dados do usuário não carregados. Faça login novamente se o problema persistir.");
+      return;
     }
 
     setLoading(true);
@@ -163,8 +179,8 @@ export default function Booking({ route, navigation }: any) {
       await addDoc(collection(db, "agendamentos"), {
         clienteId: auth.currentUser?.uid,
         clienteEmail: auth.currentUser?.email,
-        clienteNome: clientName,
-        clienteTelefone: clientPhone,
+        clienteNome: userData.nome, // <--- Puxa automático!
+        clienteTelefone: userData.telefone, // <--- Puxa automático!
         barbeiroId: barber.id,
         barbeiroNome: barber.nome,
         barbeiroFoto: barber.foto,
@@ -237,26 +253,20 @@ export default function Booking({ route, navigation }: any) {
                 <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
             </View>
 
+            {/* NOVO: CARD DE INFORMAÇÕES AUTOMÁTICAS DO CLIENTE */}
             <Text className="text-white text-lg font-bold mb-2">Seus Dados</Text>
-            <TextInput 
-                className="bg-zinc-800 text-white p-4 rounded-xl mb-3 border border-zinc-700"
-                placeholder="Seu Nome (ex: João)"
-                placeholderTextColor="#71717a"
-                value={clientName}
-                onChangeText={setClientName}
-            />
-            <TextInput 
-                className="bg-zinc-800 text-white p-4 rounded-xl mb-6 border border-zinc-700"
-                placeholder="Seu WhatsApp (ex: 11999999999)"
-                placeholderTextColor="#71717a"
-                keyboardType="phone-pad"
-                value={clientPhone}
-                onChangeText={setClientPhone}
-            />
+            <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700 flex-row items-center">
+                <View className="bg-orange-500 w-10 h-10 rounded-full items-center justify-center mr-3">
+                    <Text className="text-white font-bold text-lg">👤</Text>
+                </View>
+                <View>
+                    <Text className="text-white font-bold text-lg">{userData ? userData.nome : "Carregando..."}</Text>
+                    <Text className="text-zinc-400 text-sm">{userData ? userData.telefone : "..."}</Text>
+                </View>
+            </View>
 
             <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
             
-            {/* NOVO: SELETOR DE MESES */}
             <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
                 <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
                     <Text className={monthOffset === 0 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"← Atual"}</Text>
@@ -346,9 +356,9 @@ export default function Booking({ route, navigation }: any) {
             </View>
 
             <TouchableOpacity 
-                className={`p-4 rounded-xl items-center mb-20 ${(!selectedDate || !selectedTime || !paymentMethod) ? 'bg-zinc-700' : 'bg-orange-500'}`}
+                className={`p-4 rounded-xl items-center mb-20 ${(!selectedDate || !selectedTime || !paymentMethod || !userData) ? 'bg-zinc-700' : 'bg-orange-500'}`}
                 onPress={handleConfirmBooking}
-                disabled={loading || !selectedDate || !selectedTime || !paymentMethod}
+                disabled={loading || !selectedDate || !selectedTime || !paymentMethod || !userData}
             >
                 {loading ? (
                 <ActivityIndicator color="#fff" />
