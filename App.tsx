@@ -4,7 +4,7 @@ import { NativeWindStyleSheet } from "nativewind";
 NativeWindStyleSheet.setOutput({
   default: "native",
 });
-import CustomersList from './src/screens/CustomersList';
+
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -13,15 +13,13 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './src/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
-// NOVO: Importação das Notificações
 import * as Notifications from 'expo-notifications';
 
-// Configuração para exibir notificação mesmo com o app aberto
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: true
   }),
 });
 
@@ -38,8 +36,12 @@ import BarberProfile from './src/screens/BarberProfile';
 import Booking from './src/screens/Booking';
 import MyAppointments from './src/screens/MyAppointments';
 import FinancialScreen from './src/screens/FinancialScreen';
+import CustomersList from './src/screens/CustomersList';
 import SignUp from './src/screens/SignUp';
 import SuperAdmin from './src/screens/SuperAdmin';
+
+// NOVO: Tela de Gestão VIP
+import ManageVIPs from './src/screens/ManageVIPs';
 
 const Stack = createNativeStackNavigator();
 
@@ -51,7 +53,6 @@ export default function App() {
   useEffect(() => {
     async function initializeApp() {
       try {
-        // Pedir permissão para enviar notificações (Apenas no telemóvel)
         if (Platform.OS !== 'web') {
             const { status: existingStatus } = await Notifications.getPermissionsAsync();
             let finalStatus = existingStatus;
@@ -106,6 +107,7 @@ export default function App() {
             <Stack.Screen name="Booking" component={Booking} />
             <Stack.Screen name="MyAppointments" component={MyAppointments} />
             <Stack.Screen name="CustomersList" component={CustomersList} />
+            <Stack.Screen name="ManageVIPs" component={ManageVIPs} /> 
           </>
         ) : (
           <Stack.Group screenOptions={{ headerShown: false }}>

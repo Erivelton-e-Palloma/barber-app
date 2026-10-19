@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Platform, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore'; 
@@ -17,11 +17,14 @@ export default function Booking({ route, navigation }: any) {
   const [pixConfirmado, setPixConfirmado] = useState(false);
   const valorEntrada = service.preco * 0.5;
 
-  const [userData, setUserData] = useState<{nome: string, telefone: string} | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [busyTimes, setBusyTimes] = useState<string[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0); 
+  
+  // ESTADOS DO CONTRATO
+  const [showContract, setShowContract] = useState(false);
 
   const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
 
@@ -48,10 +51,7 @@ export default function Booking({ route, navigation }: any) {
       const day = String(date.getDate()).padStart(2, '0');
       const fullDateLocal = `${year}-${month}-${day}`;
 
-      dates.push({
-        fullDate: fullDateLocal, 
-        display: `${diaSemana} ${day}/${month}`
-      });
+      dates.push({ fullDate: fullDateLocal, display: `${diaSemana} ${day}/${month}` });
     }
     return dates;
   };
@@ -65,9 +65,14 @@ export default function Booking({ route, navigation }: any) {
           const userRef = doc(db, "usuarios", auth.currentUser.uid);
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
-            setUserData({ nome: userSnap.data().nome, telefone: userSnap.data().telefone });
+            setUserData(userSnap.data());
+          } else {
+            setUserData({ nome: auth.currentUser.email || 'Conta de Teste', telefone: 'Não informado', isVIP: false });
           }
-        } catch (error) { console.log("Erro ao buscar dados do cliente:", error); }
+        } catch (error) { 
+            console.log("Erro ao buscar dados do cliente:", error); 
+            setUserData({ nome: auth.currentUser?.email || 'Erro', telefone: '', isVIP: false });
+        }
       }
     }
     fetchUserData();
@@ -83,7 +88,6 @@ export default function Booking({ route, navigation }: any) {
     setLoadingTimes(true);
     setBusyTimes([]); 
     setSelectedTime(null); 
-
     try {
         const q = query(
             collection(db, "agendamentos"),
@@ -91,7 +95,6 @@ export default function Booking({ route, navigation }: any) {
             where("data", "==", date),
             where("status", "==", "agendado") 
         );
-
         const querySnapshot = await getDocs(q);
         const times = querySnapshot.docs.map(doc => doc.data().horario);
         setBusyTimes(times);
@@ -122,7 +125,8 @@ export default function Booking({ route, navigation }: any) {
       } catch (error) { console.log("Erro notificação:", error); }
   }
 
-  async function handleConfirmBooking() {
+  // Abre o contrato em vez de confirmar direto
+  function openContract() {
     if (!selectedDate || !selectedTime) {
       alertOrConfirm("Atenção", "Selecione um dia e um horário!");
       return;
@@ -131,7 +135,12 @@ export default function Booking({ route, navigation }: any) {
       alertOrConfirm("Atenção", "Dados não carregados. Faça login novamente.");
       return;
     }
+    setShowContract(true);
+  }
 
+  // Executa de fato após aceitar o contrato
+  async function handleConfirmBooking() {
+    setShowContract(false);
     setLoading(true);
 
     try {
@@ -159,7 +168,8 @@ export default function Booking({ route, navigation }: any) {
         data: selectedDate,
         horario: selectedTime,
         metodoPagamento: paymentMethod,
-        entradaPaga: true,
+        entradaPaga: userData.isVIP ? true : true, // VIP não precisa pagar entrada, mas consideramos "Paga/Resolvida"
+        isVIPBooking: userData.isVIP || false,
         status: 'agendado',
         shopId: shopId,
         shopName: shopName,
@@ -168,7 +178,6 @@ export default function Booking({ route, navigation }: any) {
 
       scheduleAppointmentReminder();
 
-      // Confirmação Direta - Sem WhatsApp
       if (Platform.OS === 'web') {
           alert("Agendamento Confirmado! ✅\nO barbeiro já foi notificado no sistema.");
           navigation.navigate('Home');
@@ -191,141 +200,192 @@ export default function Booking({ route, navigation }: any) {
   }
 
   const isButtonEnabled = () => {
-      if (loading || !selectedDate || !selectedTime || !userData || !pixConfirmado) return false;
+      if (loading || !selectedDate || !selectedTime || !userData) return false;
+      // Se não for VIP, precisa confirmar o PIX
+      if (!userData?.isVIP && !pixConfirmado) return false;
       return true;
   };
 
   return (
-    <FlatList
-      className="flex-1 bg-zinc-900 px-6 pt-12"
-      contentContainerStyle={{ paddingBottom: 120 }} 
-      data={[]} 
-      renderItem={null}
-      ListHeaderComponent={
-        <>
-            <View className="flex-row items-center mb-6">
-                <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
-                <Text className="text-orange-500 text-lg font-bold">← Voltar</Text>
-                </TouchableOpacity>
-                <Text className="text-white text-2xl font-bold">Agendar Horário</Text>
-            </View>
+    <View className="flex-1 bg-zinc-900">
+      <FlatList
+        className="px-6 pt-12"
+        contentContainerStyle={{ paddingBottom: 120 }} 
+        data={[]} 
+        renderItem={null}
+        ListHeaderComponent={
+          <>
+              <View className="flex-row items-center mb-6">
+                  <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
+                  <Text className="text-orange-500 text-lg font-bold">← Voltar</Text>
+                  </TouchableOpacity>
+                  <Text className="text-white text-2xl font-bold">Agendar Horário</Text>
+              </View>
 
-            <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
-                <Text className="text-zinc-400">Serviços Escolhidos:</Text>
-                <Text className="text-white text-xl font-bold">{service.nome}</Text>
-                <Text className="text-orange-500 font-bold">R$ {service.preco?.toFixed(2)} • {service.duracao} min totais</Text>
-                <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
-            </View>
+              <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                  <Text className="text-zinc-400">Serviços Escolhidos:</Text>
+                  <Text className="text-white text-xl font-bold">{service.nome}</Text>
+                  <Text className="text-orange-500 font-bold">R$ {service.preco?.toFixed(2)} • {service.duracao} min totais</Text>
+                  <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
+              </View>
 
-            <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
-            <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
-                <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
-                    <Text className={monthOffset === 0 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"← Atual"}</Text>
-                </TouchableOpacity>
-                <Text className="text-white font-bold text-lg">{getMonthName(monthOffset)}</Text>
-                <TouchableOpacity onPress={() => setMonthOffset(1)} disabled={monthOffset === 1}>
-                    <Text className={monthOffset === 1 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"Próximo →"}</Text>
-                </TouchableOpacity>
-            </View>
+              <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
+              <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
+                  <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
+                      <Text className={monthOffset === 0 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"← Atual"}</Text>
+                  </TouchableOpacity>
+                  <Text className="text-white font-bold text-lg">{getMonthName(monthOffset)}</Text>
+                  <TouchableOpacity onPress={() => setMonthOffset(1)} disabled={monthOffset === 1}>
+                      <Text className={monthOffset === 1 ? "text-zinc-600 font-bold" : "text-orange-500 font-bold"}>{"Próximo →"}</Text>
+                  </TouchableOpacity>
+              </View>
 
-            {/* ESPAÇAMENTO INFERIOR (pb-4) PARA AFASTAR A BARRA DE ROLAGEM */}
-            <View className="mb-6">
-                <FlatList 
-                horizontal
-                showsHorizontalScrollIndicator={true}
-                contentContainerStyle={{ paddingBottom: 16 }} 
-                data={dates}
-                keyExtractor={(item) => item.fullDate}
-                renderItem={({ item }) => (
-                    <TouchableOpacity 
-                    onPress={() => setSelectedDate(item.fullDate)}
-                    className={`p-4 rounded-xl mr-3 justify-center items-center border ${
-                        selectedDate === item.fullDate 
-                        ? 'bg-orange-500 border-orange-500' 
-                        : 'bg-zinc-800 border-zinc-700'
-                    }`}
-                    >
-                    <Text className={`font-bold ${selectedDate === item.fullDate ? 'text-white' : 'text-zinc-400'}`}>
-                        {item.display}
-                    </Text>
-                    </TouchableOpacity>
-                )}
-                />
-            </View>
+              <View className="mb-6">
+                  <FlatList 
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  contentContainerStyle={{ paddingBottom: 16 }} 
+                  data={dates}
+                  keyExtractor={(item) => item.fullDate}
+                  renderItem={({ item }) => (
+                      <TouchableOpacity 
+                      onPress={() => setSelectedDate(item.fullDate)}
+                      className={`p-4 rounded-xl mr-3 justify-center items-center border ${
+                          selectedDate === item.fullDate 
+                          ? 'bg-orange-500 border-orange-500' 
+                          : 'bg-zinc-800 border-zinc-700'
+                      }`}
+                      >
+                      <Text className={`font-bold ${selectedDate === item.fullDate ? 'text-white' : 'text-zinc-400'}`}>
+                          {item.display}
+                      </Text>
+                      </TouchableOpacity>
+                  )}
+                  />
+              </View>
 
-            <Text className="text-white text-lg font-bold mb-3">Escolha o Horário</Text>
-            {/* ESPAÇAMENTO INFERIOR (pb-4) PARA AFASTAR A BARRA DE ROLAGEM */}
-            <View className="mb-6">
-                {loadingTimes ? (
-                    <ActivityIndicator color="#f97316" size="small" />
-                ) : (
-                    <FlatList 
-                    horizontal
-                    showsHorizontalScrollIndicator={true}
-                    contentContainerStyle={{ paddingBottom: 16 }}
-                    data={barber.horarios} 
-                    keyExtractor={(item) => item}
-                    renderItem={({ item }) => {
-                        const isBusy = busyTimes.includes(item);
-                        if (isBusy) return null; 
+              <Text className="text-white text-lg font-bold mb-3">Escolha o Horário</Text>
+              <View className="mb-6">
+                  {loadingTimes ? (
+                      <ActivityIndicator color="#f97316" size="small" />
+                  ) : (
+                      <FlatList 
+                      horizontal
+                      showsHorizontalScrollIndicator={true}
+                      contentContainerStyle={{ paddingBottom: 16 }}
+                      data={barber.horarios} 
+                      keyExtractor={(item) => item}
+                      renderItem={({ item }) => {
+                          const isBusy = busyTimes.includes(item);
+                          if (isBusy) return null; 
 
-                        return (
-                            <TouchableOpacity 
-                            onPress={() => setSelectedTime(item)}
-                            className={`px-6 py-3 rounded-xl mr-3 justify-center items-center border ${
-                                selectedTime === item 
-                                ? 'bg-orange-500 border-orange-500' 
-                                : 'bg-zinc-800 border-zinc-700'
-                            }`}
-                            >
-                            <Text className={`font-bold ${selectedTime === item ? 'text-white' : 'text-zinc-400'}`}>
-                                {item}
-                            </Text>
+                          return (
+                              <TouchableOpacity 
+                              onPress={() => setSelectedTime(item)}
+                              className={`px-6 py-3 rounded-xl mr-3 justify-center items-center border ${
+                                  selectedTime === item 
+                                  ? 'bg-orange-500 border-orange-500' 
+                                  : 'bg-zinc-800 border-zinc-700'
+                              }`}
+                              >
+                              <Text className={`font-bold ${selectedTime === item ? 'text-white' : 'text-zinc-400'}`}>
+                                  {item}
+                              </Text>
+                              </TouchableOpacity>
+                          );
+                      }}
+                      ListEmptyComponent={() => (
+                          <Text className="text-zinc-500 italic">Selecione um dia para ver os horários.</Text>
+                      )}
+                      />
+                  )}
+              </View>
+
+              {/* LÓGICA VIP: ESCONDE O PIX SE O USUÁRIO FOR VIP */}
+              {!userData?.isVIP ? (
+                  <>
+                    <Text className="text-white text-lg font-bold mb-3">Pagamento da Entrada</Text>
+                    <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                        <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% do serviço via Pix.</Text>
+                        <Text className="text-orange-500 font-bold text-xl mb-4">Valor: R$ {valorEntrada.toFixed(2)}</Text>
+                        
+                        <Text className="text-zinc-400 text-sm mb-1">Chave Pix do Barbeiro:</Text>
+                        <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-4">
+                            <Text className="text-white font-bold">{barber.chavePix || "Chave não cadastrada"}</Text>
+                            <TouchableOpacity onPress={copyToClipboard} className="bg-zinc-700 px-3 py-1 rounded">
+                                <Text className="text-white text-xs">Copiar</Text>
                             </TouchableOpacity>
-                        );
-                    }}
-                    ListEmptyComponent={() => (
-                        <Text className="text-zinc-500 italic">Selecione um dia para ver os horários.</Text>
-                    )}
-                    />
-                )}
-            </View>
+                        </View>
 
-            <Text className="text-white text-lg font-bold mb-3">Pagamento da Entrada</Text>
-            <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
-                <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% do serviço via Pix.</Text>
-                <Text className="text-orange-500 font-bold text-xl mb-4">Valor: R$ {valorEntrada.toFixed(2)}</Text>
-                
-                <Text className="text-zinc-400 text-sm mb-1">Chave Pix do Barbeiro:</Text>
-                <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-4">
-                    <Text className="text-white font-bold">{barber.chavePix || "Chave não cadastrada"}</Text>
-                    <TouchableOpacity onPress={copyToClipboard} className="bg-zinc-700 px-3 py-1 rounded">
-                        <Text className="text-white text-xs">Copiar</Text>
-                    </TouchableOpacity>
-                </View>
+                        <TouchableOpacity 
+                            onPress={() => setPixConfirmado(true)}
+                            className={`p-3 rounded-lg items-center ${pixConfirmado ? 'bg-green-600' : 'bg-zinc-700'}`}
+                        >
+                            <Text className="text-white font-bold">{pixConfirmado ? "✅ Entrada Paga!" : "Já fiz o pagamento no banco"}</Text>
+                        </TouchableOpacity>
+                    </View>
+                  </>
+              ) : (
+                  <View className="bg-yellow-500/10 border border-yellow-500 p-4 rounded-xl mb-6 items-center">
+                      <Text className="text-yellow-500 font-bold text-lg mb-1">👑 Você é Cliente VIP!</Text>
+                      <Text className="text-zinc-300 text-center">A taxa de 50% de entrada não se aplica ao seu perfil. Agendamento liberado.</Text>
+                  </View>
+              )}
 
-                <TouchableOpacity 
-                    onPress={() => setPixConfirmado(true)}
-                    className={`p-3 rounded-lg items-center ${pixConfirmado ? 'bg-green-600' : 'bg-zinc-700'}`}
-                >
-                    <Text className="text-white font-bold">{pixConfirmado ? "✅ Entrada Paga!" : "Já fiz o pagamento no banco"}</Text>
-                </TouchableOpacity>
-            </View>
+              <TouchableOpacity 
+                  className={`p-4 rounded-xl items-center mb-20 ${isButtonEnabled() ? 'bg-orange-500' : 'bg-zinc-700'}`}
+                  onPress={openContract}
+                  disabled={!isButtonEnabled()}
+              >
+                  {loading ? (
+                  <ActivityIndicator color="#fff" />
+                  ) : (
+                  <Text className="text-white font-bold text-lg">Confirmar Agendamento ✅</Text>
+                  )}
+              </TouchableOpacity>
+          </>
+        }
+      />
 
-            <TouchableOpacity 
-                className={`p-4 rounded-xl items-center mb-20 ${isButtonEnabled() ? 'bg-orange-500' : 'bg-zinc-700'}`}
-                onPress={handleConfirmBooking}
-                disabled={!isButtonEnabled()}
-            >
-                {loading ? (
-                <ActivityIndicator color="#fff" />
-                ) : (
-                <Text className="text-white font-bold text-lg">Confirmar Agendamento ✅</Text>
-                )}
-            </TouchableOpacity>
-            <View className="h-10" />
-        </>
-      }
-    />
+      {/* MODAL DO CONTRATO DE AGENDAMENTO */}
+      <Modal
+        visible={showContract}
+        transparent={true}
+        animationType="slide"
+      >
+          <View className="flex-1 justify-end bg-black/80">
+              <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50">
+                  <Text className="text-2xl mb-4 text-center">📜</Text>
+                  <Text className="text-white font-bold text-2xl text-center mb-4">Termos de Agendamento</Text>
+                  
+                  <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                      <Text className="text-zinc-300 mb-3 leading-6">
+                          <Text className="text-white font-bold">1. Atrasos:</Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
+                      </Text>
+                      
+                      {!userData?.isVIP && (
+                          <Text className="text-zinc-300 leading-6">
+                              <Text className="text-white font-bold">2. Cancelamentos e Faltas:</Text> O valor de 50% (R$ {valorEntrada.toFixed(2)}) pago na entrada é uma <Text className="text-red-400 font-bold">taxa de marcação</Text>. Em caso de falta ou cancelamento em cima da hora, este valor não será reembolsado.
+                          </Text>
+                      )}
+                  </View>
+
+                  <TouchableOpacity 
+                      onPress={handleConfirmBooking}
+                      className="bg-green-600 p-4 rounded-xl items-center mb-3"
+                  >
+                      <Text className="text-white font-bold text-lg">Li e Concordo (Agendar) ✅</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                      onPress={() => setShowContract(false)}
+                      className="p-4 rounded-xl items-center mb-6"
+                  >
+                      <Text className="text-red-400 font-bold">Cancelar</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
+    </View>
   );
 }
