@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform, SectionList } from 'react-native';
 import { db, auth } from '../config/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function MyAppointments({ navigation }: any) {
-  const [appointments, setAppointments] = useState<any[]>([]);
+  // NOVO: Agora guardamos as seções agrupadas (Ex: [{ title: '18/10', data: [...] }])
+  const [appointmentSections, setAppointmentSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -26,9 +27,7 @@ export default function MyAppointments({ navigation }: any) {
 
       if (shopSnap.exists()) {
           const shopData = shopSnap.data();
-          if (user.email === shopData.emailDono) {
-              userIsAdmin = true;
-          }
+          if (user.email === shopData.emailDono) userIsAdmin = true;
       }
       setIsSuperAdmin(userIsAdmin);
 
@@ -45,12 +44,29 @@ export default function MyAppointments({ navigation }: any) {
         ...doc.data()
       }));
 
+      // Ordena por data e depois por horário
       list.sort((a: any, b: any) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return a.horario.localeCompare(b.horario);
       });
 
-      setAppointments(list);
+      // NOVO: Agrupa os agendamentos pela Data
+      const groupedData = list.reduce((acc: any, curr: any) => {
+          if (!acc[curr.data]) acc[curr.data] = [];
+          acc[curr.data].push(curr);
+          return acc;
+      }, {});
+
+      // Transforma o objeto num array que o SectionList entende
+      const sections = Object.keys(groupedData).map(dateKey => {
+          const [year, month, day] = dateKey.split('-');
+          return {
+              title: `${day}/${month}/${year}`,
+              data: groupedData[dateKey]
+          };
+      });
+
+      setAppointmentSections(sections);
     } catch (error) {
       console.log("Erro ao buscar agendamentos:", error);
     } finally {
@@ -65,9 +81,16 @@ export default function MyAppointments({ navigation }: any) {
   async function confirmAndCancel(id: string) {
       try {
           await deleteDoc(doc(db, "agendamentos", id));
-          setAppointments(prev => prev.filter(item => item.id !== id));
           
-          if (Platform.OS === 'web') alert("✅ Agendamento cancelado com sucesso!");
+          // Remove da lista agrupada dinamicamente
+          setAppointmentSections(prev => 
+              prev.map(section => ({
+                  ...section,
+                  data: section.data.filter((item: any) => item.id !== id)
+              })).filter(section => section.data.length > 0) // Remove a seção se ficar vazia
+          );
+          
+          if (Platform.OS === 'web') alert("✅ Agendamento cancelado!");
           else Alert.alert("Sucesso", "Agendamento cancelado!");
       } catch (error) {
           if (Platform.OS === 'web') alert("Erro ao cancelar agendamento.");
@@ -86,40 +109,32 @@ export default function MyAppointments({ navigation }: any) {
     }
   }
 
-  // NOVO: Função para o Barbeiro concluir o serviço e dar o ponto ao cliente
   async function handleCompleteService(agendamentoId: string, clienteId: string) {
     try {
-        // 1. Marca o agendamento como concluido
-        await updateDoc(doc(db, "agendamentos", agendamentoId), {
-            status: "concluido"
-        });
+        await updateDoc(doc(db, "agendamentos", agendamentoId), { status: "concluido" });
 
-        // 2. Adiciona +1 ponto no perfil do cliente
         if (clienteId) {
             await updateDoc(doc(db, "usuarios", clienteId), {
                 pontosFidelidade: increment(1)
             });
         }
 
-        // 3. Atualiza a tela
-        setAppointments(prev => prev.map(item => 
-            item.id === agendamentoId ? { ...item, status: "concluido" } : item
-        ));
+        // Atualiza o status visualmente na SectionList
+        setAppointmentSections(prev => prev.map(section => ({
+            ...section,
+            data: section.data.map((item: any) => 
+                item.id === agendamentoId ? { ...item, status: "concluido" } : item
+            )
+        })));
 
-        if (Platform.OS === 'web') alert("Serviço concluído! O cliente ganhou +1 ponto de fidelidade.");
+        if (Platform.OS === 'web') alert("Serviço concluído! O cliente ganhou +1 ponto.");
         else Alert.alert("Sucesso", "Serviço concluído! O cliente ganhou +1 ponto.");
     } catch (error) {
         console.log("Erro ao concluir:", error);
-        if (Platform.OS === 'web') alert("Erro ao concluir serviço.");
+        if (Platform.OS === 'web') alert("Erro ao concluir.");
         else Alert.alert("Erro", "Falha ao concluir o serviço.");
     }
   }
-
-  const formatDate = (dateString: string) => {
-    if(!dateString) return "";
-    const [year, month, day] = dateString.split('-');
-    return `${day}/${month}/${year}`;
-  };
 
   return (
     <View className="flex-1 bg-zinc-900 px-6 pt-12">
@@ -135,10 +150,18 @@ export default function MyAppointments({ navigation }: any) {
       {loading ? (
         <ActivityIndicator size="large" color="#f97316" />
       ) : (
-        <FlatList
-          data={appointments}
+        <SectionList
+          sections={appointmentSections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
+          
+          // CABEÇALHO DIVISOR DE CADA DATA
+          renderSectionHeader={({ section: { title } }) => (
+            <View className="bg-orange-500/20 p-2 rounded-lg mb-3 mt-4 border border-orange-500/50">
+                <Text className="text-orange-500 font-bold text-center text-lg">📅 {title}</Text>
+            </View>
+          )}
+
           renderItem={({ item }) => {
             const isConcluido = item.status === 'concluido';
 
@@ -170,11 +193,9 @@ export default function MyAppointments({ navigation }: any) {
                 </View>
 
                 <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2">
-                  <Text className="text-white font-bold mr-2">📅 {formatDate(item.data)}</Text>
                   <Text className="text-white font-bold">⏰ {item.horario}</Text>
                 </View>
 
-                {/* BOTÕES DE AÇÃO BASEADOS NO STATUS */}
                 {!isConcluido ? (
                     <View className="flex-row justify-between gap-2">
                         <TouchableOpacity 
@@ -184,7 +205,6 @@ export default function MyAppointments({ navigation }: any) {
                             <Text className="text-red-500 font-bold">Cancelar</Text>
                         </TouchableOpacity>
 
-                        {/* Só o Admin pode concluir e dar o ponto */}
                         {isSuperAdmin && (
                             <TouchableOpacity 
                                 onPress={() => handleCompleteService(item.id, item.clienteId)}
@@ -196,7 +216,7 @@ export default function MyAppointments({ navigation }: any) {
                     </View>
                 ) : (
                     <View className="bg-green-500/10 p-3 rounded-lg items-center border border-green-500/30">
-                        <Text className="text-green-400 font-bold">Serviço Finalizado (+1 Ponto concedido)</Text>
+                        <Text className="text-green-400 font-bold">Serviço Finalizado</Text>
                     </View>
                 )}
               </View>
