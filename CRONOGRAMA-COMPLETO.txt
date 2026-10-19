@@ -1,1 +1,10 @@
-🗺️ Cronograma Completo — Delp System (Atualizado)FaseStatusFoco da SprintPrincipais Entregas1✅Estabilidade e UX BaseCorreções de deep link, cancelamento e grade de 30 minutos.2✅Novo Fluxo do ClienteMáscaras no cadastro, auto-preenchimento e múltiplos serviços.3✅Mídias e IdentidadeUso direto de URLs de imagens para otimizar o banco de dados.4✅Motor FinanceiroPagamento de 50% via Pix e permissão de Super Admin.5✅Retenção e OrganizaçãoFidelidade customizável, Relatório de Frequência e Agenda em Blocos.6🔴O EcossistemaAGORA: Assinaturas mensais (Planos VIP), E-commerce de produtos e Avaliações 5 estrelas.7🔴Testes de QA e LançamentoBateria de testes finais: App completo, disparo do alarme de 20 min (cliente) e notificação instantânea de confirmação (barbeiro).
+🗺️ Cronograma Completo — Delp SystemFaseStatusFoco da SprintPrincipais Entregas1✅Estabilidade e UX BaseCorreções de deep link, cancelamento e grade de 30 minutos.2✅Novo Fluxo do ClienteMáscaras no cadastro, auto-preenchimento e múltiplos serviços.3✅Mídias e IdentidadeUso direto de URLs de imagens para otimizar o banco de dados.4✅Motor FinanceiroPagamento de 50% via Pix e permissão de Super Admin.5✅Retenção e OrganizaçãoFidelidade customizável, Relatório de Frequência e Agenda em Blocos.6🟡O EcossistemaEM ANDAMENTO: Assinaturas VIP (Vitrine, Modal Pix e Painel de Aprovação concluídos).7🔴Testes de QA e LançamentoBateria de testes finais: App completo, alarme de 20 min (cliente) e aprovações do barbeiro.
+
+🎯 O que falta para finalizarmos a Fase 6?
+Para fechar a Fase 6 com 100% de aproveitamento, faltam apenas 3 entregas:
+
+Trava de Escopo VIP no Agendamento: Ajustar a lógica para que o cliente VIP só tenha isenção do Pix se agendar os serviços do plano dele. Se escolher um serviço extra (ex: Platinado), o Pix de 50% volta a ser cobrado normalmente.
+
+E-commerce / Lojinha da Barbearia: Criar a vitrine de produtos físicos (pomadas, ceras, óleos) com carrinho de compras e opção de reserva/pagamento no app.
+
+Sistema de Avaliações 5 Estrelas: Permitir que o cliente avalie o atendimento do barbeiro após a conclusão do serviço.
