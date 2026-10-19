@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import * as Clipboard from 'expo-clipboard';
+import * as Notifications from 'expo-notifications'; 
 
 export default function Booking({ route, navigation }: any) {
   const { barber, service } = route.params;
@@ -12,7 +13,6 @@ export default function Booking({ route, navigation }: any) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   
-  // Pix é o único método agora
   const paymentMethod = 'pix';
   const [pixConfirmado, setPixConfirmado] = useState(false);
   const valorEntrada = service.preco * 0.5;
@@ -64,7 +64,6 @@ export default function Booking({ route, navigation }: any) {
         try {
           const userRef = doc(db, "usuarios", auth.currentUser.uid);
           const userSnap = await getDoc(userRef);
-          
           if (userSnap.exists()) {
             setUserData({ nome: userSnap.data().nome, telefone: userSnap.data().telefone });
           }
@@ -100,38 +99,6 @@ export default function Booking({ route, navigation }: any) {
     finally { setLoadingTimes(false); }
   }
 
-  const forceOpenWeb = (url: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank'; 
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const openWhatsAppToBarber = async (date: string, time: string) => {
-    const [ano, mes, dia] = date.split('-');
-    const dataFormatada = `${dia}/${mes}`;
-    
-    const infoPagamento = `💠 Pagamento: PIX (Entrada de R$ ${valorEntrada.toFixed(2)} PAGA ✅)`;
-    const message = `Olá *${barber.nome}*! Sou *${userData?.nome || 'Cliente'}* 👋\n\nAcabei de agendar:\n\n✂️ *${service.nome}*\n📅 ${dataFormatada} às ${time}\n${infoPagamento}`;
-    
-    if (Platform.OS === 'web') {
-        const urlWeb = `https://wa.me/?text=${encodeURIComponent(message)}`;
-        forceOpenWeb(urlWeb);
-    } else {
-        const urlMobile = `whatsapp://send?text=${encodeURIComponent(message)}`;
-        try {
-            const supported = await Linking.canOpenURL(urlMobile);
-            if (supported) { await Linking.openURL(urlMobile); } 
-            else {
-                const urlFallback = `https://wa.me/?text=${encodeURIComponent(message)}`;
-                await Linking.openURL(urlFallback);
-            }
-        } catch (error) { console.log("Erro zap", error); }
-    }
-  };
-
   const copyToClipboard = async () => {
     if (barber.chavePix) {
         await Clipboard.setStringAsync(barber.chavePix);
@@ -141,13 +108,27 @@ export default function Booking({ route, navigation }: any) {
     }
   };
 
+  async function scheduleAppointmentReminder() {
+      if (Platform.OS === 'web') return;
+      try {
+          await Notifications.scheduleNotificationAsync({
+              content: {
+                  title: "⏰ Faltam 20 minutos!",
+                  body: `Seu corte com ${barber.nome} está quase na hora. Não se atrase! ✂️`,
+                  sound: true,
+              },
+              trigger: { seconds: 10 } as any, 
+          });
+      } catch (error) { console.log("Erro notificação:", error); }
+  }
+
   async function handleConfirmBooking() {
     if (!selectedDate || !selectedTime) {
       alertOrConfirm("Atenção", "Selecione um dia e um horário!");
       return;
     }
     if (!userData) {
-      alertOrConfirm("Atenção", "Dados do usuário não carregados. Faça login novamente.");
+      alertOrConfirm("Atenção", "Dados não carregados. Faça login novamente.");
       return;
     }
 
@@ -158,7 +139,7 @@ export default function Booking({ route, navigation }: any) {
       const shopName = await AsyncStorage.getItem('@delp_shopName');
 
       if (!shopId) {
-        alertOrConfirm("Erro", "Loja não identificada. Faça login novamente.");
+        alertOrConfirm("Erro", "Loja não identificada.");
         setLoading(false);
         return;
       }
@@ -185,25 +166,16 @@ export default function Booking({ route, navigation }: any) {
         createdAt: new Date().toISOString()
       });
 
+      scheduleAppointmentReminder();
+
+      // Confirmação Direta - Sem WhatsApp
       if (Platform.OS === 'web') {
-          const confirmText = "Agendamento Confirmado! ✅\n\nDeseja enviar o comprovante para o barbeiro no WhatsApp?\n\n[OK] = Sim, Enviar Zap\n[Cancelar] = Não, obrigado";
-          if (window.confirm(confirmText)) {
-              openWhatsAppToBarber(selectedDate, selectedTime);
-          }
+          alert("Agendamento Confirmado! ✅\nO barbeiro já foi notificado no sistema.");
           navigation.navigate('Home');
       } else {
-          Alert.alert(
-            "Agendamento Confirmado! ✅", 
-            "Deseja enviar o comprovante para o barbeiro no WhatsApp?", 
-            [
-              { text: "Não, obrigado", onPress: () => navigation.navigate('Home') },
-              { text: "Sim, Enviar no Zap 💬", onPress: () => {
-                  openWhatsAppToBarber(selectedDate, selectedTime);
-                  navigation.navigate('Home');
-                }
-              }
-            ]
-          );
+          Alert.alert("Sucesso! ✅", "Agendamento confirmado. O barbeiro já recebeu seu horário no sistema.", [
+              { text: "OK", onPress: () => navigation.navigate('Home') }
+          ]);
       }
     } catch (error) {
       console.log("Erro", error);
@@ -245,17 +217,6 @@ export default function Booking({ route, navigation }: any) {
                 <Text className="text-zinc-500 mt-2">Profissional: {barber.nome}</Text>
             </View>
 
-            <Text className="text-white text-lg font-bold mb-2">Seus Dados</Text>
-            <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700 flex-row items-center">
-                <View className="bg-orange-500 w-10 h-10 rounded-full items-center justify-center mr-3">
-                    <Text className="text-white font-bold text-lg">👤</Text>
-                </View>
-                <View>
-                    <Text className="text-white font-bold text-lg">{userData ? userData.nome : "Carregando..."}</Text>
-                    <Text className="text-zinc-400 text-sm">{userData ? userData.telefone : "..."}</Text>
-                </View>
-            </View>
-
             <Text className="text-white text-lg font-bold mb-3">Escolha o Dia</Text>
             <View className="flex-row justify-between items-center mb-3 bg-zinc-800 p-3 rounded-xl border border-zinc-700">
                 <TouchableOpacity onPress={() => setMonthOffset(0)} disabled={monthOffset === 0}>
@@ -267,10 +228,12 @@ export default function Booking({ route, navigation }: any) {
                 </TouchableOpacity>
             </View>
 
-            <View className="h-20 mb-6">
+            {/* ESPAÇAMENTO INFERIOR (pb-4) PARA AFASTAR A BARRA DE ROLAGEM */}
+            <View className="mb-6">
                 <FlatList 
                 horizontal
-                showsHorizontalScrollIndicator={false}
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={{ paddingBottom: 16 }} 
                 data={dates}
                 keyExtractor={(item) => item.fullDate}
                 renderItem={({ item }) => (
@@ -291,13 +254,15 @@ export default function Booking({ route, navigation }: any) {
             </View>
 
             <Text className="text-white text-lg font-bold mb-3">Escolha o Horário</Text>
-            <View className="h-16 mb-6">
+            {/* ESPAÇAMENTO INFERIOR (pb-4) PARA AFASTAR A BARRA DE ROLAGEM */}
+            <View className="mb-6">
                 {loadingTimes ? (
                     <ActivityIndicator color="#f97316" size="small" />
                 ) : (
                     <FlatList 
                     horizontal
-                    showsHorizontalScrollIndicator={false}
+                    showsHorizontalScrollIndicator={true}
+                    contentContainerStyle={{ paddingBottom: 16 }}
                     data={barber.horarios} 
                     keyExtractor={(item) => item}
                     renderItem={({ item }) => {
@@ -358,7 +323,6 @@ export default function Booking({ route, navigation }: any) {
                 <Text className="text-white font-bold text-lg">Confirmar Agendamento ✅</Text>
                 )}
             </TouchableOpacity>
-
             <View className="h-10" />
         </>
       }

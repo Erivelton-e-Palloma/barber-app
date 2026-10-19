@@ -59,7 +59,6 @@ export default function AdminPanel() {
         <Text className="text-zinc-400">Gerencie sua barbearia por aqui.</Text>
       </View>
 
-      {/* CONTROLE DE FIDELIDADE COM SWITCH LIGA/DESLIGA */}
       <View className="bg-orange-500/10 p-4 rounded-xl mb-6 border border-orange-500">
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center">
@@ -77,7 +76,6 @@ export default function AdminPanel() {
         {fidelidadeAtiva ? (
             <>
                 <Text className="text-zinc-300 text-sm mb-4">Quantos cortes o cliente precisa fazer para ganhar o prêmio/brinde?</Text>
-                
                 <View className="flex-row items-center justify-between mb-4">
                 <TouchableOpacity 
                     onPress={() => setMetaFidelidade(prev => prev > 1 ? prev - 1 : 1)}
@@ -85,9 +83,7 @@ export default function AdminPanel() {
                 >
                     <Text className="text-white text-2xl font-bold">-</Text>
                 </TouchableOpacity>
-
                 <Text className="text-white text-3xl font-bold">{metaFidelidade}</Text>
-
                 <TouchableOpacity 
                     onPress={() => setMetaFidelidade(prev => prev + 1)}
                     className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"
@@ -109,18 +105,24 @@ export default function AdminPanel() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity 
-        className="bg-green-600 p-5 rounded-xl mb-4 flex-row items-center border border-green-400"
-        onPress={() => navigation.navigate('FinancialScreen')}
-      >
-        <View className="bg-white/20 p-3 rounded-full mr-4">
-          <Text className="text-2xl">💰</Text>
-        </View>
-        <View>
-          <Text className="text-white font-bold text-xl">Financeiro & Caixa</Text>
-          <Text className="text-green-100 text-sm">Ver faturamento do dia</Text>
-        </View>
-      </TouchableOpacity>
+      {/* NOVO: BOTÃO RELATÓRIO DE CLIENTES */}
+      <View className="flex-row justify-between mb-4 gap-2">
+          <TouchableOpacity 
+            className="flex-1 bg-green-600 p-4 rounded-xl flex-col items-center justify-center border border-green-400"
+            onPress={() => navigation.navigate('FinancialScreen')}
+          >
+            <Text className="text-3xl mb-1">💰</Text>
+            <Text className="text-white font-bold text-center">Financeiro</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            className="flex-1 bg-blue-600 p-4 rounded-xl flex-col items-center justify-center border border-blue-400"
+            onPress={() => navigation.navigate('CustomersList')}
+          >
+            <Text className="text-3xl mb-1">👥</Text>
+            <Text className="text-white font-bold text-center">Frequência</Text>
+          </TouchableOpacity>
+      </View>
 
       <Text className="text-zinc-500 font-bold mb-2 mt-2 uppercase text-xs">Cadastros</Text>
 

@@ -1,18 +1,29 @@
 import { NativeWindStyleSheet } from "nativewind";
 
 // --- O TRUQUE MÁGICO PARA WEB 🌐 ---
-// Isso força o navegador a pintar as cores igual ao celular
 NativeWindStyleSheet.setOutput({
   default: "native",
 });
-
+import CustomersList from './src/screens/CustomersList';
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './src/config/firebase';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // <--- Importante para ler a memória
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
+
+// NOVO: Importação das Notificações
+import * as Notifications from 'expo-notifications';
+
+// Configuração para exibir notificação mesmo com o app aberto
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // Importação das Telas
 import AccessScreen from './src/screens/AccessScreen'; 
@@ -35,32 +46,34 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Decide qual tela mostrar se o usuário NÃO estiver logado:
-  // "AccessScreen" (padrão) ou "Login" (se já tiver digitado o código antes)
   const [initialPublicRoute, setInitialPublicRoute] = useState('AccessScreen');
 
   useEffect(() => {
     async function initializeApp() {
       try {
-        // 1. Verifica se já existe um Código de Barbearia salvo
+        // Pedir permissão para enviar notificações (Apenas no telemóvel)
+        if (Platform.OS !== 'web') {
+            const { status: existingStatus } = await Notifications.getPermissionsAsync();
+            let finalStatus = existingStatus;
+            if (existingStatus !== 'granted') {
+                const { status } = await Notifications.requestPermissionsAsync();
+                finalStatus = status;
+            }
+        }
+
         const shopId = await AsyncStorage.getItem('@delp_shopId');
-        
         if (shopId) {
-            // Se já tem código, a tela inicial pública será o LOGIN
             setInitialPublicRoute('Login');
         } else {
-            // Se não tem, começa do CÓDIGO
             setInitialPublicRoute('AccessScreen');
         }
       } catch (error) {
         console.log("Erro ao recuperar dados:", error);
       }
 
-      // 2. Ouve se o usuário está Logado ou Deslogado no Firebase
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         setUser(currentUser);
-        setLoading(false); // Só libera o app depois de checar tudo
+        setLoading(false); 
       });
 
       return unsubscribe;
@@ -81,8 +94,6 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
-          // 🔓 ÁREA LOGADA (Privada)
-          // Se tiver user, entra aqui direto
           <>
             <Stack.Screen name="Home" component={Home} />
             <Stack.Screen name="AdminPanel" component={AdminPanel} />
@@ -94,25 +105,21 @@ export default function App() {
             <Stack.Screen name="BarberProfile" component={BarberProfile} />
             <Stack.Screen name="Booking" component={Booking} />
             <Stack.Screen name="MyAppointments" component={MyAppointments} />
+            <Stack.Screen name="CustomersList" component={CustomersList} />
           </>
         ) : (
-          // 🔒 ÁREA PÚBLICA (Deslogada)
-          // Aqui usamos o "initialPublicRoute" para decidir se começa no Código ou Login
           <Stack.Group screenOptions={{ headerShown: false }}>
             {initialPublicRoute === 'Login' ? (
-                // Se já tem código, a rota principal é Login
                 <>
                     <Stack.Screen name="Login" component={Login} />
                     <Stack.Screen name="AccessScreen" component={AccessScreen} />
                 </>
             ) : (
-                // Se não tem código, a rota principal é AccessScreen
                 <>
                     <Stack.Screen name="AccessScreen" component={AccessScreen} />
                     <Stack.Screen name="Login" component={Login} />
                 </>
             )}
-            
             <Stack.Screen name="SuperAdmin" component={SuperAdmin} />
             <Stack.Screen name="SignUp" component={SignUp} />
           </Stack.Group>
