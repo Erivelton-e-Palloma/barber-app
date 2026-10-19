@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Platform, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { db } from '../config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function AdminPanel() {
   const navigation = useNavigation<any>();
   const [metaFidelidade, setMetaFidelidade] = useState(10);
+  const [fidelidadeAtiva, setFidelidadeAtiva] = useState(true);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [shopId, setShopId] = useState<string | null>(null);
 
@@ -21,6 +22,7 @@ export default function AdminPanel() {
         if (shopSnap.exists()) {
           const data = shopSnap.data();
           if (data.metaFidelidade) setMetaFidelidade(data.metaFidelidade);
+          if (data.fidelidadeAtiva !== undefined) setFidelidadeAtiva(data.fidelidadeAtiva);
         }
       }
     }
@@ -32,9 +34,12 @@ export default function AdminPanel() {
     setLoadingConfig(true);
     try {
       const shopRef = doc(db, "barbearias", shopId);
-      await updateDoc(shopRef, { metaFidelidade: metaFidelidade });
-      if (Platform.OS === 'web') alert("Configuração de Fidelidade salva!");
-      else Alert.alert("Sucesso", "Configuração de Fidelidade salva!");
+      await updateDoc(shopRef, { 
+          metaFidelidade: metaFidelidade,
+          fidelidadeAtiva: fidelidadeAtiva 
+      });
+      if (Platform.OS === 'web') alert("Configurações atualizadas com sucesso!");
+      else Alert.alert("Sucesso", "Configurações atualizadas com sucesso!");
     } catch (error) {
       console.log(error);
       if (Platform.OS === 'web') alert("Erro ao salvar.");
@@ -54,38 +59,53 @@ export default function AdminPanel() {
         <Text className="text-zinc-400">Gerencie sua barbearia por aqui.</Text>
       </View>
 
-      {/* NOVO: CONFIGURAÇÃO DE FIDELIDADE */}
+      {/* CONTROLE DE FIDELIDADE COM SWITCH LIGA/DESLIGA */}
       <View className="bg-orange-500/10 p-4 rounded-xl mb-6 border border-orange-500">
-        <View className="flex-row items-center mb-2">
-          <Text className="text-2xl mr-2">🎁</Text>
-          <Text className="text-white font-bold text-lg">Regra de Fidelidade</Text>
-        </View>
-        <Text className="text-zinc-300 text-sm mb-4">Quantos cortes o cliente precisa fazer para ganhar o prêmio/brinde?</Text>
-        
         <View className="flex-row items-center justify-between mb-4">
-          <TouchableOpacity 
-            onPress={() => setMetaFidelidade(prev => prev > 1 ? prev - 1 : 1)}
-            className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"
-          >
-            <Text className="text-white text-2xl font-bold">-</Text>
-          </TouchableOpacity>
-
-          <Text className="text-white text-3xl font-bold">{metaFidelidade}</Text>
-
-          <TouchableOpacity 
-            onPress={() => setMetaFidelidade(prev => prev + 1)}
-            className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"
-          >
-            <Text className="text-white text-2xl font-bold">+</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center">
+            <Text className="text-2xl mr-2">🎁</Text>
+            <Text className="text-white font-bold text-lg">Programa de Brindes</Text>
+          </View>
+          <Switch
+            value={fidelidadeAtiva}
+            onValueChange={setFidelidadeAtiva}
+            trackColor={{ false: '#3f3f46', true: '#f97316' }}
+            thumbColor={'#fff'}
+          />
         </View>
+        
+        {fidelidadeAtiva ? (
+            <>
+                <Text className="text-zinc-300 text-sm mb-4">Quantos cortes o cliente precisa fazer para ganhar o prêmio/brinde?</Text>
+                
+                <View className="flex-row items-center justify-between mb-4">
+                <TouchableOpacity 
+                    onPress={() => setMetaFidelidade(prev => prev > 1 ? prev - 1 : 1)}
+                    className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"
+                >
+                    <Text className="text-white text-2xl font-bold">-</Text>
+                </TouchableOpacity>
+
+                <Text className="text-white text-3xl font-bold">{metaFidelidade}</Text>
+
+                <TouchableOpacity 
+                    onPress={() => setMetaFidelidade(prev => prev + 1)}
+                    className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"
+                >
+                    <Text className="text-white text-2xl font-bold">+</Text>
+                </TouchableOpacity>
+                </View>
+            </>
+        ) : (
+            <Text className="text-zinc-400 text-sm mb-4 italic">O cartão de fidelidade está oculto para os clientes.</Text>
+        )}
 
         <TouchableOpacity 
           onPress={saveLoyaltyConfig}
           disabled={loadingConfig}
           className="bg-orange-500 py-3 rounded-lg items-center"
         >
-          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Meta</Text>}
+          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Configuração</Text>}
         </TouchableOpacity>
       </View>
 

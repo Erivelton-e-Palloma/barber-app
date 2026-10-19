@@ -14,6 +14,7 @@ export default function Home({ navigation }: any) {
   // Estados do Cartão Fidelidade
   const [pontos, setPontos] = useState(0);
   const [meta, setMeta] = useState(10);
+  const [fidelidadeAtiva, setFidelidadeAtiva] = useState(true);
 
   async function checkPermissionAndLoyalty() {
       const name = await AsyncStorage.getItem('@delp_shopName');
@@ -23,20 +24,21 @@ export default function Home({ navigation }: any) {
 
       setShopName(name || "Barbearia");
 
-      // Verifica se é dono
       if (currentUser?.email && ownerEmail && currentUser.email.toLowerCase() === ownerEmail.toLowerCase()) {
           setIsOwner(true); 
       } else {
           setIsOwner(false);
       }
 
-      // Busca os dados da Fidelidade
       if (shopId && currentUser) {
           try {
-              // 1. Puxa a meta da barbearia
+              // 1. Puxa as regras da barbearia
               const shopSnap = await getDoc(doc(db, "barbearias", shopId));
-              if (shopSnap.exists() && shopSnap.data().metaFidelidade) {
-                  setMeta(shopSnap.data().metaFidelidade);
+              if (shopSnap.exists()) {
+                  const data = shopSnap.data();
+                  if (data.metaFidelidade) setMeta(data.metaFidelidade);
+                  // Se o dono desativou, a variável fica false
+                  setFidelidadeAtiva(data.fidelidadeAtiva ?? true); 
               }
 
               // 2. Puxa os pontos do cliente logado
@@ -50,7 +52,6 @@ export default function Home({ navigation }: any) {
       }
   }
 
-  // useFocusEffect recarrega os dados toda vez que o cliente volta pra Home
   useFocusEffect(
     useCallback(() => {
         checkPermissionAndLoyalty();
@@ -103,7 +104,6 @@ export default function Home({ navigation }: any) {
     }
   }
 
-  // Cálculo da barra de progresso
   const progresso = Math.min((pontos / meta) * 100, 100);
 
   return (
@@ -121,30 +121,31 @@ export default function Home({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* NOVO: CARTÃO FIDELIDADE DIGITAL */}
-      <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-6 border border-orange-500/30 shadow-lg">
-          <View className="flex-row justify-between items-center mb-3">
-              <View className="flex-row items-center">
-                  <Text className="text-2xl mr-2">🎁</Text>
-                  <Text className="text-white font-bold text-lg">Cartão Fidelidade</Text>
+      {/* CARTÃO SÓ APARECE SE O DONO DEIXOU ATIVADO */}
+      {fidelidadeAtiva && (
+          <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-6 border border-orange-500/30 shadow-lg">
+              <View className="flex-row justify-between items-center mb-3">
+                  <View className="flex-row items-center">
+                      <Text className="text-2xl mr-2">🎁</Text>
+                      <Text className="text-white font-bold text-lg">Cartão Fidelidade</Text>
+                  </View>
+                  <Text className="text-orange-500 font-bold text-xl">{pontos}/{meta}</Text>
               </View>
-              <Text className="text-orange-500 font-bold text-xl">{pontos}/{meta}</Text>
-          </View>
-          
-          {/* Barra de Progresso */}
-          <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2">
-              <View 
-                  className="h-full bg-orange-500 rounded-full" 
-                  style={{ width: `${progresso}%` }} 
-              />
-          </View>
+              
+              <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2">
+                  <View 
+                      className="h-full bg-orange-500 rounded-full" 
+                      style={{ width: `${progresso}%` }} 
+                  />
+              </View>
 
-          {pontos >= meta ? (
-              <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Você atingiu a meta e ganhou o prêmio!</Text>
-          ) : (
-              <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o seu brinde.</Text>
-          )}
-      </View>
+              {pontos >= meta ? (
+                  <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Você atingiu a meta e ganhou o prêmio!</Text>
+              ) : (
+                  <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o seu brinde.</Text>
+              )}
+          </View>
+      )}
 
       <View className="mb-6">
         <TouchableOpacity 
