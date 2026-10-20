@@ -8,7 +8,6 @@ export default function Login({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
   const [showPassword, setShowPassword] = useState(false);
 
   // Função auxiliar para exibir alertas em Web e Mobile
@@ -47,6 +46,22 @@ export default function Login({ navigation }: any) {
     }
   }
 
+  // NOVA FUNÇÃO: Limpa a barbearia atual da memória e volta para o código
+  async function handleTrocarBarbearia() {
+      try {
+          await AsyncStorage.removeItem('@delp_shopId');
+          await AsyncStorage.removeItem('@delp_shopName');
+          await AsyncStorage.removeItem('@delp_ownerEmail');
+          
+          navigation.reset({
+              index: 0,
+              routes: [{ name: 'AccessScreen' }],
+          });
+      } catch (error) {
+          console.log("Erro ao limpar dados:", error);
+      }
+  }
+
   return (
     <View className="flex-1 bg-zinc-900 justify-center px-8">
       
@@ -58,7 +73,6 @@ export default function Login({ navigation }: any) {
         <Text className="text-zinc-400 mt-2">Seu estilo, no seu tempo.</Text>
       </View>
 
-      {/* INPUT EMAIL */}
       <TextInput 
         className="bg-zinc-800 text-white p-4 rounded-xl mb-4 border border-zinc-700"
         placeholder="Email"
@@ -69,7 +83,6 @@ export default function Login({ navigation }: any) {
         onChangeText={setEmail}
       />
 
-      {/* INPUT SENHA COM BOTÃO DE OLHO 👁️ */}
       <View className="flex-row items-center bg-zinc-800 rounded-xl mb-6 border border-zinc-700">
         <TextInput 
           className="flex-1 text-white p-4" 
@@ -107,9 +120,9 @@ export default function Login({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
-      {/* Botão extra para trocar de Barbearia */}
-      <TouchableOpacity onPress={() => navigation.replace('AccessScreen')} className="mt-8">
-        <Text className="text-zinc-600 text-center text-xs">
+      {/* BOTÃO ATUALIZADO COM A FUNÇÃO DE LIMPEZA */}
+      <TouchableOpacity onPress={handleTrocarBarbearia} className="mt-8">
+        <Text className="text-zinc-600 text-center text-xs underline">
             Trocar de Barbearia (Código)
         </Text>
       </TouchableOpacity>

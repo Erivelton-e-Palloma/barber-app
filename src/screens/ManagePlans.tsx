@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ManagePlans({ navigation }: any) {
   const [plans, setPlans] = useState<any[]>([]);
-  const [servicosDisponiveis, setServicosDisponiveis] = useState<any[]>([]); // TODOS OS SERVIÇOS DO BARBEIRO
+  const [servicosDisponiveis, setServicosDisponiveis] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -14,7 +14,7 @@ export default function ManagePlans({ navigation }: any) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nome, setNome] = useState('');
   const [preco, setPreco] = useState('');
-  const [selectedServices, setSelectedServices] = useState<string[]>([]); // ARRAY COM OS NOMES DOS SERVIÇOS MARCADOS
+  const [selectedServices, setSelectedServices] = useState<string[]>([]); 
   const [liberaTodos, setLiberaTodos] = useState(false); 
   const [shopIdState, setShopIdState] = useState('');
 
@@ -25,12 +25,10 @@ export default function ManagePlans({ navigation }: any) {
       if (!shopId) return;
       setShopIdState(shopId);
 
-      // 1. Busca os Planos VIP
       const qPlanos = query(collection(db, "planos_vip"), where("shopId", "==", shopId));
       const snapPlanos = await getDocs(qPlanos);
       setPlans(snapPlanos.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-      // 2. Busca os Serviços Cadastrados (para montar a lista de checkboxes)
       const qServicos = query(collection(db, "servicos"), where("shopId", "==", shopId));
       const snapServicos = await getDocs(qServicos);
       setServicosDisponiveis(snapServicos.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -52,7 +50,6 @@ export default function ManagePlans({ navigation }: any) {
     setNome(plano.nome);
     setPreco(plano.preco.toString());
     
-    // Converte a string "Degradê, Barba" de volta para array ["Degradê", "Barba"] para marcar as caixinhas
     const servicosSalvos = plano.itens ? plano.itens.split(', ') : [];
     setSelectedServices(servicosSalvos);
     
@@ -69,7 +66,6 @@ export default function ManagePlans({ navigation }: any) {
   };
 
   async function handleSave() {
-    // Se não for "Super Assinatura", exige que selecione pelo menos um serviço
     if (!nome || !preco || (!liberaTodos && selectedServices.length === 0)) {
         if (Platform.OS === 'web') alert("Preencha o nome, preço e selecione os serviços (ou ative a Super Assinatura).");
         else Alert.alert("Aviso", "Preencha o nome, preço e selecione os serviços.");
@@ -79,7 +75,6 @@ export default function ManagePlans({ navigation }: any) {
     setIsSaving(true);
     try {
       const precoNumber = parseFloat(preco.replace(',', '.'));
-      // Transforma o Array ["Degradê", "Barba"] numa String "Degradê, Barba" para o banco
       const itensString = liberaTodos ? 'Todos os Serviços' : selectedServices.join(', ');
       
       const planData = { shopId: shopIdState, nome, preco: precoNumber, itens: itensString, liberaTodos };
@@ -132,13 +127,16 @@ export default function ManagePlans({ navigation }: any) {
         />
       )}
 
-      {/* MODAL COM CHECKBOXES */}
+      {/* MODAL COM CHECKBOXES E SCROLL CORRIGIDO */}
       <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View className="flex-1 justify-end bg-black/80">
-          <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50 max-h-[90%]">
-            <Text className="text-white font-bold text-2xl mb-6 text-center">{editingId ? 'Editar Plano' : 'Novo Plano VIP'}</Text>
+          <View className="bg-zinc-900 pt-6 px-6 rounded-t-3xl border-t border-orange-500/50 w-full" style={{ maxHeight: '90%', flexShrink: 1 }}>
+            
+            <Text className="text-white font-bold text-2xl mb-4 text-center">
+              {editingId ? 'Editar Plano' : 'Novo Plano VIP'}
+            </Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 80 }}>
                 <Text className="text-zinc-400 mb-2">Nome do Plano</Text>
                 <TextInput value={nome} onChangeText={setNome} placeholder="Ex: Master All-Inclusive" placeholderTextColor="#71717a" className="bg-zinc-800 text-white p-4 rounded-xl mb-4 border border-zinc-700" />
 
@@ -150,12 +148,11 @@ export default function ManagePlans({ navigation }: any) {
                     <Switch value={liberaTodos} onValueChange={setLiberaTodos} trackColor={{ false: '#3f3f46', true: '#eab308' }} />
                 </View>
 
-                {/* LISTA DINÂMICA DE SERVIÇOS (TIPO CHECKBOX) */}
                 {!liberaTodos && (
                     <View className="mb-4">
                         <Text className="text-zinc-400 mb-2">Selecione os Serviços Cobertos:</Text>
                         {servicosDisponiveis.length === 0 ? (
-                            <Text className="text-zinc-500 italic text-sm mb-2">Você ainda não tem serviços cadastrados. Vá em 'Serviços' no Painel Admin.</Text>
+                            <Text className="text-zinc-500 italic text-sm mb-2">Você ainda não tem serviços cadastrados.</Text>
                         ) : (
                             servicosDisponiveis.map((srv) => {
                                 const isChecked = selectedServices.includes(srv.nome);
@@ -163,12 +160,15 @@ export default function ManagePlans({ navigation }: any) {
                                     <TouchableOpacity 
                                         key={srv.id} 
                                         onPress={() => toggleService(srv.nome)}
-                                        className={`p-3 rounded-lg mb-2 flex-row items-center border ${isChecked ? 'bg-orange-500/20 border-orange-500' : 'bg-zinc-800 border-zinc-700'}`}
+                                        className={`p-4 rounded-xl mb-2 flex-row items-center border ${isChecked ? 'bg-orange-500/10 border-orange-500' : 'bg-zinc-800 border-zinc-700'}`}
                                     >
-                                        <View className={`w-5 h-5 rounded border items-center justify-center mr-3 ${isChecked ? 'bg-orange-500 border-orange-500' : 'border-zinc-500'}`}>
-                                            {isChecked && <Text className="text-white text-xs">✓</Text>}
+                                        <View className={`w-6 h-6 rounded border items-center justify-center mr-4 ${isChecked ? 'bg-orange-500 border-orange-500' : 'border-zinc-500'}`}>
+                                            {isChecked && <Text className="text-white font-bold text-sm">✓</Text>}
                                         </View>
-                                        <Text className={`font-bold ${isChecked ? 'text-orange-500' : 'text-zinc-300'}`}>{srv.nome}</Text>
+                                        <View>
+                                            <Text className={`font-bold text-lg ${isChecked ? 'text-orange-500' : 'text-zinc-300'}`}>{srv.nome}</Text>
+                                            <Text className="text-zinc-400 text-sm mt-1">R$ {srv.preco?.toFixed(2)} • {srv.duracao} min</Text>
+                                        </View>
                                     </TouchableOpacity>
                                 );
                             })
@@ -177,12 +177,14 @@ export default function ManagePlans({ navigation }: any) {
                 )}
 
                 <Text className="text-zinc-400 mb-2 mt-2">Valor Mensal (R$)</Text>
-                <TextInput value={preco} onChangeText={setPreco} keyboardType="numeric" placeholder="Ex: 100.00" placeholderTextColor="#71717a" className="bg-zinc-800 text-white p-4 rounded-xl mb-6 border border-zinc-700" />
+                <TextInput value={preco} onChangeText={setPreco} keyboardType="numeric" placeholder="Ex: 100.00" placeholderTextColor="#71717a" className="bg-zinc-800 text-white p-4 rounded-xl mb-8 border border-zinc-700" />
 
                 <TouchableOpacity onPress={handleSave} disabled={isSaving} className="bg-orange-500 p-4 rounded-xl items-center mb-3">
-                {isSaving ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Salvar Plano</Text>}
+                    {isSaving ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Salvar Plano</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setModalVisible(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setModalVisible(false)} className="p-4 rounded-xl items-center mb-6">
+                    <Text className="text-red-400 font-bold">Cancelar</Text>
+                </TouchableOpacity>
             </ScrollView>
           </View>
         </View>

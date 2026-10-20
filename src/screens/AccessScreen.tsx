@@ -1,110 +1,104 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../config/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-
-const MASTER_CODE = "DELPMASTER"; 
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function AccessScreen({ navigation }: any) {
-  const [code, setCode] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
 
-  // Função auxiliar para exibir alertas em Web e Mobile
-  function showAlert(title: string, message: string) {
-      if (Platform.OS === 'web') {
-          alert(`${title}\n\n${message}`);
-      } else {
-          Alert.alert(title, message);
+  useEffect(() => {
+    // Se o cliente já acessou uma barbearia antes, pula direto para o Login
+    async function checkExisting() {
+      const id = await AsyncStorage.getItem('@delp_shopId');
+      if (id) {
+        navigation.replace('Login');
       }
-  }
+      setChecking(false);
+    }
+    checkExisting();
+  }, []);
 
   async function handleAccess() {
-    if (code.trim() === '') {
-      showAlert("Atenção", "Digite o código da barbearia.");
+    const cod = codigo.trim().toUpperCase(); // Padroniza o código para maiúsculas
+    if (!cod) return;
+
+    // Acesso Exclusivo do Dono do SaaS
+    if (cod === 'DELPMASTER') {
+      setCodigo('');
+      navigation.navigate('SuperAdmin');
       return;
     }
 
-    if (code.toUpperCase() === MASTER_CODE) {
-        navigation.navigate('SuperAdmin');
-        return;
-    }
-
+    // Acesso do Cliente à Barbearia Específica
     setLoading(true);
-
     try {
-      const q = query(
-        collection(db, "barbearias"), 
-        where("codigo", "==", code.toUpperCase())
-      );
-      
-      const querySnapshot = await getDocs(q);
+      const shopRef = doc(db, "barbearias", cod);
+      const shopSnap = await getDoc(shopRef);
 
-      if (querySnapshot.empty) {
-        showAlert("Erro", "Código não encontrado.");
-        setLoading(false);
-        return;
+      if (shopSnap.exists()) {
+        const data = shopSnap.data();
+        
+        // Salva os dados de conexão da barbearia no aparelho
+        await AsyncStorage.setItem('@delp_shopId', cod);
+        await AsyncStorage.setItem('@delp_shopName', data.nome);
+        if (data.ownerEmail) await AsyncStorage.setItem('@delp_ownerEmail', data.ownerEmail);
+
+        setCodigo('');
+        navigation.navigate('Login'); // Vai para a tela de login da barbearia escolhida
+      } else {
+        if (Platform.OS === 'web') alert("Código não encontrado. Verifique se digitou corretamente.");
+        else Alert.alert("Não Encontrado", "Código da barbearia inválido.");
       }
-
-      const shopDoc = querySnapshot.docs[0];
-      const shopData = shopDoc.data();
-
-      if (shopData.ativo === false) {
-          showAlert("Acesso Suspenso 🚫", "Barbearia indisponível.");
-          setLoading(false);
-          return;
-      }
-
-      // SALVAMOS O EMAIL DO DONO NA MEMÓRIA
-      await AsyncStorage.setItem('@delp_shopId', shopDoc.id);
-      await AsyncStorage.setItem('@delp_shopName', shopData.nome);
-      
-      // Se tiver emailDono, salva. Se for antigo e não tiver, salva string vazia.
-      await AsyncStorage.setItem('@delp_ownerEmail', shopData.emailDono || "");
-
-      navigation.replace('Login');
-
     } catch (error) {
       console.log(error);
-      showAlert("Erro", "Falha ao verificar código.");
+      if (Platform.OS === 'web') alert("Erro ao acessar o sistema.");
     } finally {
       setLoading(false);
     }
   }
 
+  if (checking) {
+      return <View className="flex-1 bg-[#1a1a1c] justify-center items-center"><ActivityIndicator color="#f97316" size="large" /></View>;
+  }
+
   return (
-    <View className="flex-1 bg-zinc-900 justify-center items-center px-8">
-      <View className="items-center mb-10">
-        <Text className="text-orange-500 font-bold text-5xl mb-2">DELP</Text>
-        <Text className="text-white text-xl tracking-widest">SYSTEM</Text>
+    <View className="flex-1 bg-[#1a1a1c] justify-center items-center px-6">
+      <View className="items-center mb-8 mt-10">
+        <Text className="text-orange-500 text-6xl font-extrabold tracking-wider">DELP</Text>
+        <Text className="text-white text-xl font-semibold tracking-[0.3em] mt-1">SYSTEM</Text>
       </View>
 
-      <Text className="text-zinc-400 mb-4 text-center">
+      <Text className="text-zinc-400 text-sm mb-6 text-center">
         Digite o código da sua barbearia para acessar
       </Text>
 
-      <TextInput 
-        className="bg-zinc-800 text-white w-full p-4 rounded-xl text-center text-2xl font-bold tracking-widest border border-zinc-700 mb-6"
-        placeholder="CÓDIGO"
-        placeholderTextColor="#52525b"
-        autoCapitalize="characters"
-        value={code}
-        onChangeText={setCode}
-      />
+      <View className="w-full max-w-md">
+        <TextInput
+          value={codigo}
+          onChangeText={setCodigo}
+          placeholder="CÓDIGO"
+          placeholderTextColor="#52525b"
+          autoCapitalize="characters"
+          className="bg-[#27272a] text-zinc-300 text-center font-bold text-lg p-4 rounded-xl mb-4 border border-[#3f3f46]"
+        />
 
-      <TouchableOpacity 
-        className="bg-orange-500 w-full p-4 rounded-xl items-center"
-        onPress={handleAccess}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text className="text-white font-bold text-lg">ACESSAR 🚀</Text>
-        )}
-      </TouchableOpacity>
-      
-      <Text className="text-zinc-600 mt-8 text-xs">v1.0.6 EriBrasil</Text>
+        <TouchableOpacity
+          onPress={handleAccess}
+          disabled={loading}
+          className="bg-orange-500 p-4 rounded-xl items-center"
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white font-bold text-lg">ACESSAR 🚀</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <Text className="text-zinc-600 text-xs absolute bottom-8">v1.0.6 EriBrasil</Text>
     </View>
   );
 }

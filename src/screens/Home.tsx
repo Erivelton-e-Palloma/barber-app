@@ -10,8 +10,10 @@ import * as Clipboard from 'expo-clipboard';
 export default function Home({ navigation }: any) {
   const [barbers, setBarbers] = useState<any[]>([]);
   const [planosVipDinamicos, setPlanosVipDinamicos] = useState<any[]>([]);
+  const [servicosLoja, setServicosLoja] = useState<any[]>([]); // NOVO: Para calcular a economia
+  
   const [shopName, setShopName] = useState('');
-  const [shopLogo, setShopLogo] = useState<string | null>(null); // NOVO ESTADO DA LOGO
+  const [shopLogo, setShopLogo] = useState<string | null>(null); 
   const [shopIdState, setShopIdState] = useState('');
   const [chavePixLoja, setChavePixLoja] = useState('');
   const [isOwner, setIsOwner] = useState(false); 
@@ -41,6 +43,7 @@ export default function Home({ navigation }: any) {
       if (shopId) {
           setShopIdState(shopId);
           fetchPlanosDinamicos(shopId);
+          fetchServicosLoja(shopId); // NOVO: Busca serviços para calcular o desconto
       }
 
       if (currentUser?.email && ownerEmail && currentUser.email.toLowerCase() === ownerEmail.toLowerCase()) {
@@ -55,7 +58,7 @@ export default function Home({ navigation }: any) {
               if (shopSnap.exists()) {
                   const data = shopSnap.data();
                   if (data.nome) setShopName(data.nome);
-                  if (data.logo) setShopLogo(data.logo); // CARREGA A LOGO DO BANCO DE DADOS
+                  if (data.logo) setShopLogo(data.logo); 
                   if (data.metaFidelidade) setMeta(data.metaFidelidade);
                   setFidelidadeAtiva(data.fidelidadeAtiva ?? true); 
                   if (data.chavePixLoja) setChavePixLoja(data.chavePixLoja);
@@ -101,6 +104,15 @@ export default function Home({ navigation }: any) {
           const snap = await getDocs(q);
           setPlanosVipDinamicos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (error) { console.log("Erro ao buscar planos:", error); }
+  }
+
+  // Busca todos os serviços da barbearia para o motor de desconto
+  async function fetchServicosLoja(idLoja: string) {
+      try {
+          const q = query(collection(db, "servicos"), where("shopId", "==", idLoja));
+          const snap = await getDocs(q);
+          setServicosLoja(snap.docs.map(d => d.data()));
+      } catch (error) { console.log("Erro ao buscar servicos:", error); }
   }
 
   function handleLogout() {
@@ -163,7 +175,6 @@ export default function Home({ navigation }: any) {
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
       
-      {/* CABEÇALHO ATUALIZADO COM A LOGO REDONDA */}
       <View className="flex-row justify-between items-start mb-6">
         <View className="flex-row items-center flex-1">
           {shopLogo ? (
@@ -189,6 +200,7 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
+      {/* VITRINE DINÂMICA DE PLANOS COM CÁLCULO DE ECONOMIA */}
       {!isVIP && !isOwner && planosVipDinamicos.length > 0 && (
           <View className="mb-6">
               <Text className="text-white text-xl font-bold mb-3">Planos de Assinatura 👑</Text>
@@ -199,17 +211,54 @@ export default function Home({ navigation }: any) {
                   showsHorizontalScrollIndicator={false}
                   data={planosVipDinamicos}
                   keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                      <View className="bg-zinc-800 border border-yellow-500/50 p-4 rounded-xl mr-4 w-60">
-                          <Text className="text-yellow-500 font-bold text-lg mb-1">{item.nome}</Text>
-                          <Text className="text-zinc-300 text-sm mb-3 h-10">{item.itens}</Text>
-                          <Text className="text-white font-bold text-2xl mb-4">R$ {item.preco?.toFixed(2)}<Text className="text-sm text-zinc-400">/mês</Text></Text>
-                          
-                          <TouchableOpacity onPress={() => openPlanModal(item)} className="bg-yellow-600 p-3 rounded-lg items-center">
-                              <Text className="text-white font-bold">Quero Assinar</Text>
-                          </TouchableOpacity>
-                      </View>
-                  )}
+                  renderItem={({ item }) => {
+                      // MATEMÁTICA DO DESCONTO
+                      const isSuper = item.liberaTodos;
+                      let valorOriginal = 0;
+                      
+                      if (!isSuper && item.itens) {
+                          const nomesServicosPlano = item.itens.split(', ');
+                          // Soma o preço real de todos os serviços que fazem parte deste plano
+                          valorOriginal = servicosLoja
+                              .filter(s => nomesServicosPlano.includes(s.nome))
+                              .reduce((acc, curr) => acc + (curr.preco || 0), 0);
+                      }
+
+                      const temEconomia = valorOriginal > item.preco;
+                      const economiaReal = valorOriginal - item.preco;
+                      const economiaPorcentagem = valorOriginal > 0 ? Math.round((economiaReal / valorOriginal) * 100) : 0;
+
+                      return (
+                          <View className="bg-zinc-800 border border-yellow-500/50 p-4 rounded-xl mr-4 w-64 justify-between">
+                              <View>
+                                  <Text className="text-yellow-500 font-bold text-lg mb-1">{item.nome}</Text>
+                                  <Text className="text-zinc-300 text-sm mb-2 h-10">{item.itens}</Text>
+                                  
+                                  {/* EXIBIÇÃO DA ECONOMIA */}
+                                  {isSuper ? (
+                                      <View className="mb-3 h-12 justify-center">
+                                          <Text className="text-green-400 font-bold text-xs bg-green-400/10 self-start px-2 py-1 rounded">🔥 Acesso Livre / Economia Máxima</Text>
+                                      </View>
+                                  ) : temEconomia ? (
+                                      <View className="mb-3 h-12 justify-center">
+                                          <Text className="text-zinc-400 text-xs line-through">Sem plano: R$ {valorOriginal.toFixed(2)}</Text>
+                                          <Text className="text-green-400 font-bold text-xs bg-green-400/10 self-start px-2 py-1 rounded mt-1">
+                                              🔥 Economiza R$ {economiaReal.toFixed(2)} ({economiaPorcentagem}%)
+                                          </Text>
+                                      </View>
+                                  ) : (
+                                      <View className="mb-3 h-12 justify-center" />
+                                  )}
+
+                                  <Text className="text-white font-bold text-2xl mb-4">R$ {item.preco?.toFixed(2)}<Text className="text-sm text-zinc-400">/mês</Text></Text>
+                              </View>
+                              
+                              <TouchableOpacity onPress={() => openPlanModal(item)} className="bg-yellow-600 p-3 rounded-lg items-center">
+                                  <Text className="text-white font-bold">Quero Assinar</Text>
+                              </TouchableOpacity>
+                          </View>
+                      );
+                  }}
               />
           </View>
       )}
@@ -243,7 +292,8 @@ export default function Home({ navigation }: any) {
         )}
       </View>
 
-      <Text className="text-white text-xl font-bold mb-4">Nossos Barbeiros(as)</Text>
+      <Text className="text-white text-xl font-bold mb-4">Nossos Barbeiros(as).
+        <br />Clique no barbeiro e agende seu serviço!</Text>
       <View className="mb-10">
         {barbers.map(item => (
             <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl mb-4 flex-row items-center border border-zinc-700">
