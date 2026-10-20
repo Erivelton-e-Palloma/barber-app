@@ -37,23 +37,18 @@ export default function ManageVIPs({ navigation }: any) {
   // FUNÇÃO: APROVAR PAGAMENTO E ATIVAR VIP
   async function aprovarPedidoVIP(pedido: any) {
       try {
-          // Ativa o VIP no usuário (30 dias)
-          const d = new Date();
-          d.setDate(d.getDate() + 30);
-          
+          const d = new Date(); d.setDate(d.getDate() + 30);
           await updateDoc(doc(db, "usuarios", pedido.clienteId), { 
               isVIP: true,
               vipExpiration: d.toISOString(),
-              vipPlanName: pedido.planoNome
+              vipPlanName: pedido.planoNome,
+              vipPlanItens: pedido.planoItens || '', // Grava o que cobre
+              vipLiberaTodos: pedido.planoLiberaTodos || false // Grava se é Super Assinatura
           });
-
-          // Atualiza/Deleta o pedido
           await deleteDoc(doc(db, "solicitacoes_vip", pedido.id));
-          
           if (Platform.OS === 'web') alert("Pagamento aprovado! O cliente agora é VIP.");
           else Alert.alert("Sucesso", "Pagamento aprovado! Cliente ativado como VIP.");
-          
-          fetchData(); // Recarrega
+          fetchData(); 
       } catch (error) { console.log(error); }
   }
 
@@ -63,8 +58,7 @@ export default function ManageVIPs({ navigation }: any) {
     let nomePlano = '';
 
     if (novoStatus) {
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
+        const d = new Date(); d.setDate(d.getDate() + 30);
         dataVencimento = d.toISOString();
         nomePlano = 'Ativação Manual';
     }
@@ -73,7 +67,9 @@ export default function ManageVIPs({ navigation }: any) {
       await updateDoc(doc(db, "usuarios", userId), { 
           isVIP: novoStatus,
           vipExpiration: dataVencimento,
-          vipPlanName: nomePlano
+          vipPlanName: nomePlano,
+          vipPlanItens: 'Todos',
+          vipLiberaTodos: true // Ativação manual feita pelo dono sempre libera tudo
       });
       fetchData(); 
     } catch (error) { Alert.alert("Erro", "Não foi possível alterar o status VIP."); }

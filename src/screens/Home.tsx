@@ -7,15 +7,11 @@ import { collection, getDocs, query, where, doc, getDoc, addDoc } from 'firebase
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 
-const PLANOS_VIP = [
-  { id: '1', nome: 'Social + Sobrancelha', preco: 25.00, itens: 'Corte Social e Sobrancelha' },
-  { id: '2', nome: 'Degradê + Barba', preco: 35.00, itens: 'Corte Degradê e Barba' },
-  { id: '3', nome: 'Plano Master', preco: 60.00, itens: 'Corte Livre 4x ao mês' }
-];
-
 export default function Home({ navigation }: any) {
   const [barbers, setBarbers] = useState<any[]>([]);
+  const [planosVipDinamicos, setPlanosVipDinamicos] = useState<any[]>([]);
   const [shopName, setShopName] = useState('');
+  const [shopLogo, setShopLogo] = useState<string | null>(null); // NOVO ESTADO DA LOGO
   const [shopIdState, setShopIdState] = useState('');
   const [chavePixLoja, setChavePixLoja] = useState('');
   const [isOwner, setIsOwner] = useState(false); 
@@ -42,7 +38,10 @@ export default function Home({ navigation }: any) {
       const currentUser = auth.currentUser;
 
       setShopName(name || "Barbearia");
-      if (shopId) setShopIdState(shopId);
+      if (shopId) {
+          setShopIdState(shopId);
+          fetchPlanosDinamicos(shopId);
+      }
 
       if (currentUser?.email && ownerEmail && currentUser.email.toLowerCase() === ownerEmail.toLowerCase()) {
           setIsOwner(true); 
@@ -55,6 +54,8 @@ export default function Home({ navigation }: any) {
               const shopSnap = await getDoc(doc(db, "barbearias", shopId));
               if (shopSnap.exists()) {
                   const data = shopSnap.data();
+                  if (data.nome) setShopName(data.nome);
+                  if (data.logo) setShopLogo(data.logo); // CARREGA A LOGO DO BANCO DE DADOS
                   if (data.metaFidelidade) setMeta(data.metaFidelidade);
                   setFidelidadeAtiva(data.fidelidadeAtiva ?? true); 
                   if (data.chavePixLoja) setChavePixLoja(data.chavePixLoja);
@@ -94,6 +95,14 @@ export default function Home({ navigation }: any) {
     fetchBarbers();
   }, []);
 
+  async function fetchPlanosDinamicos(idLoja: string) {
+      try {
+          const q = query(collection(db, "planos_vip"), where("shopId", "==", idLoja));
+          const snap = await getDocs(q);
+          setPlanosVipDinamicos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (error) { console.log("Erro ao buscar planos:", error); }
+  }
+
   function handleLogout() {
       if (Platform.OS === 'web') {
           if (window.confirm("Deseja sair?")) signOut(auth).then(() => window.location.reload());
@@ -105,7 +114,6 @@ export default function Home({ navigation }: any) {
       }
   }
 
-  // ABRIR O MODAL DO PLANO
   const openPlanModal = (plano: any) => {
       setSelectedPlan(plano);
       setShowPlanModal(true);
@@ -122,7 +130,6 @@ export default function Home({ navigation }: any) {
       }
   };
 
-  // ENVIA SOLICITAÇÃO PARA O BARBEIRO
   const handleConfirmPayment = async () => {
       if (!userData) return;
       setIsRequesting(true);
@@ -133,7 +140,9 @@ export default function Home({ navigation }: any) {
               clienteTelefone: userData.telefone || 'Sem contato',
               planoId: selectedPlan.id,
               planoNome: selectedPlan.nome,
+              planoItens: selectedPlan.itens || 'Todos',
               planoPreco: selectedPlan.preco,
+              planoLiberaTodos: selectedPlan.liberaTodos || false, 
               shopId: shopIdState,
               status: 'pendente',
               dataSolicitacao: new Date().toISOString()
@@ -153,13 +162,22 @@ export default function Home({ navigation }: any) {
 
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+      
+      {/* CABEÇALHO ATUALIZADO COM A LOGO REDONDA */}
       <View className="flex-row justify-between items-start mb-6">
-        <View>
-          <Text className="text-zinc-400 text-sm">Olá, Bem-vindo</Text>
-          <Text className="text-white text-3xl font-bold">{shopName}</Text>
+        <View className="flex-row items-center flex-1">
+          {shopLogo ? (
+              <Image source={{ uri: shopLogo }} className="w-12 h-12 rounded-full mr-3 border border-orange-500" />
+          ) : (
+              <Text className="text-3xl mr-3">💈</Text>
+          )}
+          <View className="flex-1">
+              <Text className="text-zinc-400 text-sm">Olá, Bem-vindo</Text>
+              <Text className="text-white text-xl font-bold truncate" numberOfLines={1}>{shopName}</Text>
+          </View>
         </View>
-        <TouchableOpacity onPress={handleLogout} className="bg-zinc-800 px-4 py-2 rounded-lg border border-zinc-700">
-          <Text className="text-red-400 font-bold">Sair</Text>
+        <TouchableOpacity onPress={handleLogout} className="bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700 ml-2">
+          <Text className="text-red-400 font-bold text-xs">Sair</Text>
         </TouchableOpacity>
       </View>
 
@@ -171,22 +189,21 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* VITRINE */}
-      {!isVIP && !isOwner && (
+      {!isVIP && !isOwner && planosVipDinamicos.length > 0 && (
           <View className="mb-6">
               <Text className="text-white text-xl font-bold mb-3">Planos de Assinatura 👑</Text>
-              <Text className="text-zinc-400 text-sm mb-4">Seja VIP tenha mais exclusividade, descontos, pague por mês e não se preocupe mais com taxas de agendamento nos seus serviços favoritos.</Text>
+              <Text className="text-zinc-400 text-sm mb-4">Seja VIP, pague por mês e não se preocupe mais com taxas de agendamento nos seus serviços favoritos.</Text>
               
               <FlatList
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  data={PLANOS_VIP}
+                  data={planosVipDinamicos}
                   keyExtractor={(item) => item.id}
                   renderItem={({ item }) => (
                       <View className="bg-zinc-800 border border-yellow-500/50 p-4 rounded-xl mr-4 w-60">
                           <Text className="text-yellow-500 font-bold text-lg mb-1">{item.nome}</Text>
                           <Text className="text-zinc-300 text-sm mb-3 h-10">{item.itens}</Text>
-                          <Text className="text-white font-bold text-2xl mb-4">R$ {item.preco.toFixed(2)}<Text className="text-sm text-zinc-400">/mês</Text></Text>
+                          <Text className="text-white font-bold text-2xl mb-4">R$ {item.preco?.toFixed(2)}<Text className="text-sm text-zinc-400">/mês</Text></Text>
                           
                           <TouchableOpacity onPress={() => openPlanModal(item)} className="bg-yellow-600 p-3 rounded-lg items-center">
                               <Text className="text-white font-bold">Quero Assinar</Text>
@@ -206,7 +223,11 @@ export default function Home({ navigation }: any) {
               <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2">
                   <View className="h-full bg-orange-500 rounded-full" style={{ width: `${progresso}%` }} />
               </View>
-              {pontos >= meta ? <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Você atingiu a meta e ganhou o prêmio!</Text> : <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o brinde.</Text>}
+              {pontos >= meta ? (
+                  <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Você atingiu a meta e ganhou o prêmio!</Text> 
+              ) : (
+                  <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o brinde.</Text>
+              )}
           </View>
       )}
 

@@ -4,7 +4,7 @@ import { NativeWindStyleSheet } from "nativewind";
 NativeWindStyleSheet.setOutput({
   default: "native",
 });
-
+import ManagePlans from './src/screens/ManagePlans';
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -107,7 +107,8 @@ export default function App() {
             <Stack.Screen name="Booking" component={Booking} />
             <Stack.Screen name="MyAppointments" component={MyAppointments} />
             <Stack.Screen name="CustomersList" component={CustomersList} />
-            <Stack.Screen name="ManageVIPs" component={ManageVIPs} /> 
+            <Stack.Screen name="ManageVIPs" component={ManageVIPs} />
+            <Stack.Screen name="ManagePlans" component={ManagePlans} /> 
           </>
         ) : (
           <Stack.Group screenOptions={{ headerShown: false }}>

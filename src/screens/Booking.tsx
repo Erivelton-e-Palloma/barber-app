@@ -125,32 +125,39 @@ export default function Booking({ route, navigation }: any) {
       } catch (error) { console.log("Erro notificação:", error); }
   }
 
-  // --- NOVA LÓGICA DE TRAVA DE ESCOPO VIP ---
+ // --- NOVA LÓGICA DE TRAVA DE ESCOPO VIP & SUPER ASSINATURA ---
   const isVIPActive = userData?.isVIP || false;
   const planoDoCliente = userData?.vipPlanName || '';
+  const planoItens = userData?.vipPlanItens || userData?.vipPlanName || ''; 
+  const liberaTodos = userData?.vipLiberaTodos || false; // VERIFICA SE É SUPER ASSINATURA
 
-  const checkServiceCovered = (servico: string, plano: string) => {
-      if (!plano) return false;
-      const s = servico.toLowerCase();
-      const p = plano.toLowerCase();
+  const checkServiceCovered = (servicoStr: string, itensStr: string, superVIP: boolean) => {
+      if (superVIP) return true; // SE A FLAG FOR TRUE, LIBERA QUALQUER SERVIÇO IMEDIATAMENTE
+      if (!itensStr) return false;
 
-      // Master ou ativação manual do dono cobrem qualquer serviço
-      if (p.includes('master') || p.includes('manual')) return true;
+      const s = servicoStr.toLowerCase();
+      const i = itensStr.toLowerCase();
 
-      // Se o plano for Social + Sobrancelha
-      if (p.includes('social') && p.includes('sobrancelha')) {
-          return s.includes('social') || s.includes('sobrancelha');
-      }
-      // Se o plano for Degradê + Barba
-      if (p.includes('degrad') && p.includes('barba')) {
-          return s.includes('degrad') || s.includes('barba');
-      }
+      // Fallback manual antigo por segurança
+      if (i.includes('master') || i.includes('manual')) return true;
+
+      // Busca Inteligente: Divide o nome do serviço em palavras principais
+      // Ex: "Corte Degradê" -> ['degradê'] e procura se essa palavra existe na descrição do plano.
+      const palavrasServico = s.split(/\s+/).filter(word => word.length > 3 && word !== 'corte');
       
-      return false; // Se não bater as palavras-chave, barra a isenção
+      if (palavrasServico.length === 0) {
+           return i.includes(s); // Se o serviço se chamar só "Pé", valida direto.
+      }
+
+      for (let word of palavrasServico) {
+           if (i.includes(word)) return true; // Se achar a palavra chave, libera.
+      }
+
+      return false; 
   };
 
-  const isServiceCovered = isVIPActive ? checkServiceCovered(service.nome, planoDoCliente) : false;
-  // ------------------------------------------
+  const isServiceCovered = isVIPActive ? checkServiceCovered(service.nome, planoItens, liberaTodos) : false;
+  // --------------------------------------------------------------
 
   function openContract() {
     if (!selectedDate || !selectedTime) {

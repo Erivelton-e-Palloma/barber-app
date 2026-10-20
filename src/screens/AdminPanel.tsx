@@ -150,6 +150,13 @@ export default function AdminPanel() {
           <Text className="text-zinc-400 text-sm">Preços e tipos de corte</Text>
         </View>
       </TouchableOpacity>
+      <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManagePlans')}>
+        <Text className="text-2xl mr-4">💎</Text>
+        <View>
+          <Text className="text-white font-bold text-lg">Planos VIP</Text>
+          <Text className="text-zinc-400 text-sm">Criar e editar pacotes de assinatura</Text>
+        </View>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
