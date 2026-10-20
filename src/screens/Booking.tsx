@@ -125,7 +125,33 @@ export default function Booking({ route, navigation }: any) {
       } catch (error) { console.log("Erro notificação:", error); }
   }
 
-  // Abre o contrato em vez de confirmar direto
+  // --- NOVA LÓGICA DE TRAVA DE ESCOPO VIP ---
+  const isVIPActive = userData?.isVIP || false;
+  const planoDoCliente = userData?.vipPlanName || '';
+
+  const checkServiceCovered = (servico: string, plano: string) => {
+      if (!plano) return false;
+      const s = servico.toLowerCase();
+      const p = plano.toLowerCase();
+
+      // Master ou ativação manual do dono cobrem qualquer serviço
+      if (p.includes('master') || p.includes('manual')) return true;
+
+      // Se o plano for Social + Sobrancelha
+      if (p.includes('social') && p.includes('sobrancelha')) {
+          return s.includes('social') || s.includes('sobrancelha');
+      }
+      // Se o plano for Degradê + Barba
+      if (p.includes('degrad') && p.includes('barba')) {
+          return s.includes('degrad') || s.includes('barba');
+      }
+      
+      return false; // Se não bater as palavras-chave, barra a isenção
+  };
+
+  const isServiceCovered = isVIPActive ? checkServiceCovered(service.nome, planoDoCliente) : false;
+  // ------------------------------------------
+
   function openContract() {
     if (!selectedDate || !selectedTime) {
       alertOrConfirm("Atenção", "Selecione um dia e um horário!");
@@ -138,7 +164,6 @@ export default function Booking({ route, navigation }: any) {
     setShowContract(true);
   }
 
-  // Executa de fato após aceitar o contrato
   async function handleConfirmBooking() {
     setShowContract(false);
     setLoading(true);
@@ -168,8 +193,8 @@ export default function Booking({ route, navigation }: any) {
         data: selectedDate,
         horario: selectedTime,
         metodoPagamento: paymentMethod,
-        entradaPaga: userData.isVIP ? true : true, // VIP não precisa pagar entrada, mas consideramos "Paga/Resolvida"
-        isVIPBooking: userData.isVIP || false,
+        entradaPaga: true, 
+        isVIPBooking: isServiceCovered, // Registra no banco se foi um agendamento isento pelo VIP
         status: 'agendado',
         shopId: shopId,
         shopName: shopName,
@@ -201,8 +226,8 @@ export default function Booking({ route, navigation }: any) {
 
   const isButtonEnabled = () => {
       if (loading || !selectedDate || !selectedTime || !userData) return false;
-      // Se não for VIP, precisa confirmar o PIX
-      if (!userData?.isVIP && !pixConfirmado) return false;
+      // Agora o botão só bloqueia se o serviço NÃO estiver coberto e o pix NÃO tiver sido confirmado
+      if (!isServiceCovered && !pixConfirmado) return false;
       return true;
   };
 
@@ -301,9 +326,16 @@ export default function Booking({ route, navigation }: any) {
                   )}
               </View>
 
-              {/* LÓGICA VIP: ESCONDE O PIX SE O USUÁRIO FOR VIP */}
-              {!userData?.isVIP ? (
+              {/* LÓGICA VIP ATUALIZADA: VERIFICA SE O SERVIÇO FAZ PARTE DO PLANO */}
+              {!isServiceCovered ? (
                   <>
+                    {/* Alerta caso seja VIP mas o serviço for extra */}
+                    {isVIPActive && (
+                        <View className="bg-orange-500/10 border border-orange-500 p-3 rounded-xl mb-4">
+                            <Text className="text-orange-500 font-bold mb-1">👑 VIP: Serviço Extra</Text>
+                            <Text className="text-zinc-300 text-sm">O serviço <Text className="font-bold text-white">{service.nome}</Text> não está incluso no seu <Text className="font-bold text-white">{planoDoCliente}</Text>. A taxa padrão será aplicada.</Text>
+                        </View>
+                    )}
                     <Text className="text-white text-lg font-bold mb-3">Pagamento da Entrada</Text>
                     <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
                         <Text className="text-white font-bold mb-2">Para garantir o horário, pague 50% do serviço via Pix.</Text>
@@ -327,8 +359,8 @@ export default function Booking({ route, navigation }: any) {
                   </>
               ) : (
                   <View className="bg-yellow-500/10 border border-yellow-500 p-4 rounded-xl mb-6 items-center">
-                      <Text className="text-yellow-500 font-bold text-lg mb-1">👑 Você é Cliente VIP!</Text>
-                      <Text className="text-zinc-300 text-center">A taxa de 50% de entrada não se aplica ao seu perfil. Agendamento liberado.</Text>
+                      <Text className="text-yellow-500 font-bold text-lg mb-1">👑 Coberto pelo seu Plano VIP!</Text>
+                      <Text className="text-zinc-300 text-center">A taxa de entrada não se aplica pois este serviço faz parte do seu plano ({planoDoCliente}). Agendamento liberado.</Text>
                   </View>
               )}
 
@@ -363,7 +395,7 @@ export default function Booking({ route, navigation }: any) {
                           <Text className="text-white font-bold">1. Atrasos:</Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
                       </Text>
                       
-                      {!userData?.isVIP && (
+                      {!isServiceCovered && (
                           <Text className="text-zinc-300 leading-6">
                               <Text className="text-white font-bold">2. Cancelamentos e Faltas:</Text> O valor de 50% (R$ {valorEntrada.toFixed(2)}) pago na entrada é uma <Text className="text-red-400 font-bold">taxa de marcação</Text>. Em caso de falta ou cancelamento em cima da hora, este valor não será reembolsado.
                           </Text>
