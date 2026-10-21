@@ -10,6 +10,8 @@ export default function AdminPanel() {
   const [metaFidelidade, setMetaFidelidade] = useState(10);
   const [fidelidadeAtiva, setFidelidadeAtiva] = useState(true);
   const [chavePixLoja, setChavePixLoja] = useState(''); 
+  const [enderecoLoja, setEnderecoLoja] = useState(''); 
+  const [linkMapsLoja, setLinkMapsLoja] = useState(''); 
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [shopId, setShopId] = useState<string | null>(null);
 
@@ -25,13 +27,14 @@ export default function AdminPanel() {
           if (data.metaFidelidade) setMetaFidelidade(data.metaFidelidade);
           if (data.fidelidadeAtiva !== undefined) setFidelidadeAtiva(data.fidelidadeAtiva);
           if (data.chavePixLoja) setChavePixLoja(data.chavePixLoja); 
+          if (data.enderecoLoja) setEnderecoLoja(data.enderecoLoja);
+          if (data.linkMapsLoja) setLinkMapsLoja(data.linkMapsLoja);
         }
       }
     }
     loadConfig();
   }, []);
 
-  // Função global que salva todas as configurações da loja
   async function saveShopConfig() {
     if (!shopId) return;
     setLoadingConfig(true);
@@ -40,7 +43,9 @@ export default function AdminPanel() {
       await updateDoc(shopRef, { 
           metaFidelidade: metaFidelidade, 
           fidelidadeAtiva: fidelidadeAtiva,
-          chavePixLoja: chavePixLoja 
+          chavePixLoja: chavePixLoja,
+          enderecoLoja: enderecoLoja,
+          linkMapsLoja: linkMapsLoja
       });
       if (Platform.OS === 'web') alert("Configurações atualizadas com sucesso!");
       else Alert.alert("Sucesso", "Configurações atualizadas com sucesso!");
@@ -66,10 +71,10 @@ export default function AdminPanel() {
         <Text className="text-zinc-400">Gerencie sua barbearia por aqui.</Text>
       </View>
 
-      {/* BLOCO DA CHAVE PIX COM BOTÃO DE SALVAR */}
       <View className="bg-zinc-800 p-4 rounded-xl mb-4 border border-zinc-700">
-        <Text className="text-white font-bold mb-2">Chave Pix da Barbearia</Text>
-        <Text className="text-zinc-400 text-xs mb-3">Usada para receber os pagamentos das assinaturas VIP.</Text>
+        <Text className="text-white font-bold mb-2">Informações da Loja</Text>
+        
+        <Text className="text-zinc-400 text-xs mb-1 mt-2">Chave Pix (Recebimentos)</Text>
         <TextInput 
           value={chavePixLoja}
           onChangeText={setChavePixLoja}
@@ -77,16 +82,30 @@ export default function AdminPanel() {
           placeholderTextColor="#71717a"
           className="bg-zinc-900 text-white p-3 rounded-lg border border-zinc-700 mb-3"
         />
-        <TouchableOpacity 
-          onPress={saveShopConfig} 
-          disabled={loadingConfig} 
-          className="bg-zinc-700 py-3 rounded-lg items-center"
-        >
-          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Chave Pix</Text>}
+
+        <Text className="text-zinc-400 text-xs mb-1 mt-2">Endereço Físico</Text>
+        <TextInput 
+          value={enderecoLoja}
+          onChangeText={setEnderecoLoja}
+          placeholder="Ex: Av. Principal, 123 - Centro"
+          placeholderTextColor="#71717a"
+          className="bg-zinc-900 text-white p-3 rounded-lg border border-zinc-700 mb-3"
+        />
+
+        <Text className="text-zinc-400 text-xs mb-1 mt-2">Link do Google Maps</Text>
+        <TextInput 
+          value={linkMapsLoja}
+          onChangeText={setLinkMapsLoja}
+          placeholder="Cole aqui o link de partilha do mapa"
+          placeholderTextColor="#71717a"
+          className="bg-zinc-900 text-white p-3 rounded-lg border border-zinc-700 mb-4"
+        />
+
+        <TouchableOpacity onPress={saveShopConfig} disabled={loadingConfig} className="bg-zinc-700 py-3 rounded-lg items-center">
+          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Informações</Text>}
         </TouchableOpacity>
       </View>
 
-      {/* BLOCO DE FIDELIDADE */}
       <View className="bg-orange-500/10 p-4 rounded-xl mb-4 border border-orange-500">
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center">
@@ -100,75 +119,74 @@ export default function AdminPanel() {
             <>
                 <Text className="text-zinc-300 text-sm mb-4">Cortes para ganhar brinde:</Text>
                 <View className="flex-row items-center justify-between mb-4">
-                <TouchableOpacity onPress={() => setMetaFidelidade(prev => prev > 1 ? prev - 1 : 1)} className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"><Text className="text-white text-2xl font-bold">-</Text></TouchableOpacity>
-                <Text className="text-white text-3xl font-bold">{metaFidelidade}</Text>
-                <TouchableOpacity onPress={() => setMetaFidelidade(prev => prev + 1)} className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"><Text className="text-white text-2xl font-bold">+</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMetaFidelidade(prev => prev > 1 ? prev - 1 : 1)} className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"><Text className="text-white text-2xl font-bold">-</Text></TouchableOpacity>
+                  <Text className="text-white text-3xl font-bold">{metaFidelidade}</Text>
+                  <TouchableOpacity onPress={() => setMetaFidelidade(prev => prev + 1)} className="bg-zinc-800 w-12 h-12 rounded-lg items-center justify-center border border-zinc-700"><Text className="text-white text-2xl font-bold">+</Text></TouchableOpacity>
                 </View>
             </>
         )}
 
         <TouchableOpacity onPress={saveShopConfig} disabled={loadingConfig} className="bg-orange-500 py-3 rounded-lg items-center mt-2">
-          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Regras de Brinde</Text>}
+          {loadingConfig ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold">Salvar Regras</Text>}
         </TouchableOpacity>
       </View>
 
-      {/* RELATÓRIOS E GESTÃO VIP */}
-      <View className="flex-row justify-between mb-3 gap-2 mt-2">
-          <TouchableOpacity className="flex-1 bg-green-600 p-4 rounded-xl items-center justify-center border border-green-400" onPress={() => navigation.navigate('FinancialScreen')}>
+      <View className="flex-row justify-between mb-3 gap-2 mt-2 flex-wrap">
+          <TouchableOpacity className="flex-1 min-w-[140px] bg-green-600 p-4 rounded-xl items-center justify-center border border-green-400" onPress={() => navigation.navigate('FinancialScreen')}>
             <Text className="text-3xl mb-1">💰</Text>
             <Text className="text-white font-bold">Financeiro</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity className="flex-1 bg-blue-600 p-4 rounded-xl items-center justify-center border border-blue-400" onPress={() => navigation.navigate('CustomersList')}>
+          <TouchableOpacity className="flex-1 min-w-[140px] bg-blue-600 p-4 rounded-xl items-center justify-center border border-blue-400" onPress={() => navigation.navigate('CustomersList')}>
             <Text className="text-3xl mb-1">👥</Text>
             <Text className="text-white font-bold">Frequência</Text>
           </TouchableOpacity>
       </View>
 
-      <TouchableOpacity 
-        className="bg-yellow-600 p-4 rounded-xl mb-6 items-center flex-row justify-center border border-yellow-400" 
-        onPress={() => navigation.navigate('ManageVIPs')}
-      >
+      <TouchableOpacity className="bg-yellow-600 p-4 rounded-xl mb-6 items-center flex-row justify-center border border-yellow-400" onPress={() => navigation.navigate('ManageVIPs')}>
           <Text className="text-2xl mr-2">👑</Text>
           <Text className="text-white font-bold text-lg">Gerenciar Clientes VIP</Text>
       </TouchableOpacity>
 
-      <Text className="text-zinc-500 font-bold mb-2 uppercase text-xs">Cadastros</Text>
+      <Text className="text-zinc-500 font-bold mb-2 uppercase text-xs">Cadastros e Lojinha</Text>
 
       <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageBarbers')}>
         <Text className="text-2xl mr-4">✂️</Text>
-        <View>
+        <View className="flex-1">
           <Text className="text-white font-bold text-lg">Equipe</Text>
-          <Text className="text-zinc-400 text-sm">Adicionar ou remover barbeiros</Text>
+          <Text className="text-zinc-400 text-sm flex-wrap">Adicionar ou remover barbeiros</Text>
         </View>
       </TouchableOpacity>
 
       <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageServices')}>
         <Text className="text-2xl mr-4">🏷️</Text>
-        <View>
+        <View className="flex-1">
           <Text className="text-white font-bold text-lg">Serviços</Text>
-          <Text className="text-zinc-400 text-sm">Preços e tipos de corte</Text>
+          <Text className="text-zinc-400 text-sm flex-wrap">Preços e tipos de corte</Text>
         </View>
       </TouchableOpacity>
+
       <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManagePlans')}>
         <Text className="text-2xl mr-4">💎</Text>
-        <View>
+        <View className="flex-1">
           <Text className="text-white font-bold text-lg">Planos VIP</Text>
-          <Text className="text-zinc-400 text-sm">Criar e editar pacotes de assinatura</Text>
+          <Text className="text-zinc-400 text-sm flex-wrap">Criar e editar pacotes de assinatura</Text>
         </View>
       </TouchableOpacity>
+
       <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageProducts')}>
         <Text className="text-2xl mr-4">🛍️</Text>
-        <View>
-          <Text className="text-white font-bold text-lg">Lojinha (Produtos)</Text>
-          <Text className="text-zinc-400 text-sm">Controle de estoque e vendas</Text>
+        <View className="flex-1">
+          <Text className="text-white font-bold text-lg">Estoque (Produtos)</Text>
+          <Text className="text-zinc-400 text-sm flex-wrap">Cadastrar produtos da lojinha</Text>
         </View>
       </TouchableOpacity>
+
       <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageStoreOrders')}>
         <Text className="text-2xl mr-4">📦</Text>
-        <View>
-          <Text className="text-white font-bold text-lg">Pedidos da Lojinha</Text>
-          <Text className="text-zinc-400 text-sm">Aprovar vendas e conferir Pix</Text>
+        <View className="flex-1">
+          <Text className="text-white font-bold text-lg">Vendas da Lojinha</Text>
+          <Text className="text-zinc-400 text-sm flex-wrap">Aprovar vendas e conferir Pix</Text>
         </View>
       </TouchableOpacity>
     </ScrollView>
