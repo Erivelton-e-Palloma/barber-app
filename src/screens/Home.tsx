@@ -67,7 +67,7 @@ export default function Home({ navigation }: any) {
                   const data = shopSnap.data();
                   if (data.nome) setShopName(data.nome);
                   if (data.logo) setShopLogo(data.logo); 
-                  if (data.metaFidelidade) setMeta(data.metaFidelidade);
+                  if (data.metaFidelidade) setMetaFidelidade(data.metaFidelidade);
                   setFidelidadeAtiva(data.fidelidadeAtiva ?? true); 
                   if (data.chavePixLoja) setChavePixLoja(data.chavePixLoja);
               }
@@ -216,17 +216,23 @@ export default function Home({ navigation }: any) {
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
       
+      {/* CABEÇALHO ATUALIZADO (NOVO BOTÃO DE PERFIL) */}
       <View className="flex-row justify-between items-start mb-6">
-        <View className="flex-row items-center flex-1">
+        <View className="flex-row items-center flex-1 pr-2">
           {shopLogo ? <Image source={{ uri: shopLogo }} className="w-12 h-12 rounded-full mr-3 border border-orange-500" /> : <Text className="text-3xl mr-3">💈</Text>}
           <View className="flex-1">
               <Text className="text-zinc-400 text-sm">Olá, Bem-vindo</Text>
               <Text className="text-white text-xl font-bold truncate" numberOfLines={1}>{shopName}</Text>
           </View>
         </View>
-        <TouchableOpacity onPress={handleLogout} className="bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700 ml-2">
-          <Text className="text-red-400 font-bold text-xs">Sair</Text>
-        </TouchableOpacity>
+        <View className="flex-row items-center">
+            <TouchableOpacity onPress={() => navigation.navigate('UserProfile')} className="bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700 ml-2">
+              <Text className="text-white font-bold text-xs">👤 Perfil</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} className="bg-zinc-800 px-3 py-2 rounded-lg border border-zinc-700 ml-2">
+              <Text className="text-red-400 font-bold text-xs">Sair</Text>
+            </TouchableOpacity>
+        </View>
       </View>
 
       {isVIP && diasVencimentoVIP !== null && (
@@ -235,9 +241,8 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* 1. BARBEIROS */}
       <View className="mb-6">
-          <Text className="text-white text-xl font-bold mb-4">Escolha um Barbeiro(a)</Text>
+          <Text className="text-white text-xl font-bold mb-4">Escolha um Profissional</Text>
           <View className="flex-row flex-wrap gap-4">
             {barbers.map(item => (
                 <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700 flex-1 min-w-[280px] max-w-[400px]">
@@ -252,13 +257,11 @@ export default function Home({ navigation }: any) {
           </View>
       </View>
 
-      {/* 2. MEUS AGENDAMENTOS E PAINEL ADMIN */}
       <View className="mb-8">
         <TouchableOpacity className="bg-orange-500 p-4 rounded-xl mb-3 items-center shadow-lg" onPress={() => navigation.navigate('MyAppointments')}><Text className="text-white font-bold text-lg">📅 Meus Agendamentos</Text></TouchableOpacity>
         {isOwner && <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl items-center border border-zinc-700" onPress={() => navigation.navigate('AdminPanel')}><Text className="text-orange-500 font-bold text-lg">⚙️ Painel Admin</Text></TouchableOpacity>}
       </View>
 
-      {/* 3. CARTÃO FIDELIDADE */}
       {fidelidadeAtiva && (
           <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-8 border border-orange-500/30 shadow-lg">
               <View className="flex-row justify-between items-center mb-3">
@@ -270,7 +273,6 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* 4. PLANOS VIP EM GRID (NOVO) */}
       {!isVIP && !isOwner && planosVipDinamicos.length > 0 && (
           <View className="mb-8">
               <Text className="text-white text-xl font-bold mb-3">Planos de Assinatura 👑</Text>
@@ -314,7 +316,6 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* 5. LOJINHA EM GRID (NOVO) */}
       {!isOwner && produtosLojinha.length > 0 && (
           <View className="mb-10">
               <View className="flex-row justify-between items-center mb-3">
@@ -342,7 +343,6 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* MODAIS (MANTIDOS IGUAIS) */}
       <Modal visible={showPlanModal} transparent={true} animationType="slide">
           <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50"><Text className="text-2xl mb-2 text-center">👑</Text><Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text><Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">Realize o pagamento via Pix:</Text><Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View></View><TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">{isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
       </Modal>

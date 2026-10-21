@@ -14,7 +14,6 @@ export default function BarberProfile({ route, navigation }: any) {
   const [reviews, setReviews] = useState<any[]>([]);
   const [averageRating, setAverageRating] = useState(barber.nota || "5.0");
 
-  // --- ESTADOS DA LOCALIZAÇÃO ---
   const [shopAddress, setShopAddress] = useState("Endereço não cadastrado");
   const [shopMapLink, setShopMapLink] = useState("");
 
@@ -33,7 +32,6 @@ export default function BarberProfile({ route, navigation }: any) {
             return;
         }
 
-        // Busca Informações da Loja (Endereço e Mapa)
         const shopRef = doc(db, "barbearias", shopId);
         const shopSnap = await getDoc(shopRef);
         if (shopSnap.exists()) {
@@ -42,12 +40,10 @@ export default function BarberProfile({ route, navigation }: any) {
             if (data.linkMapsLoja) setShopMapLink(data.linkMapsLoja);
         }
 
-        // Busca os Serviços
         const qServicos = query(collection(db, "servicos"), where("shopId", "==", shopId));
         const snapServicos = await getDocs(qServicos);
         setServices(snapServicos.docs.map(d => ({ id: d.id, ...d.data() })));
 
-        // Busca as Avaliações
         const qAvaliacoes = query(collection(db, "avaliacoes"), where("barbeiroId", "==", barber.id));
         const snapAvaliacoes = await getDocs(qAvaliacoes);
         const listaAvaliacoes = snapAvaliacoes.docs.map(d => d.data());
@@ -127,14 +123,19 @@ export default function BarberProfile({ route, navigation }: any) {
           </View>
 
           <View className="px-6 mt-6 mb-2">
-            <TouchableOpacity onPress={handleOpenMap} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700">
-                <Text className="text-2xl mr-3">📍</Text>
-                <View className="flex-1">
-                    <Text className="text-white font-bold">Localização (Toque para abrir)</Text>
-                    <Text className="text-zinc-400 text-sm mt-1">{shopAddress}</Text>
+            <View className="bg-zinc-800 p-4 rounded-xl border border-zinc-700">
+                <View className="flex-row items-center mb-4">
+                    <Text className="text-2xl mr-3">📍</Text>
+                    <View className="flex-1">
+                        <Text className="text-white font-bold">Localização</Text>
+                        <Text className="text-zinc-400 text-sm mt-1">{shopAddress}</Text>
+                    </View>
                 </View>
-                <Text className="text-orange-500 font-bold">🗺️</Text>
-            </TouchableOpacity>
+                
+                <TouchableOpacity onPress={handleOpenMap} className="bg-orange-500/20 border border-orange-500 p-3 rounded-lg flex-row justify-center items-center">
+                    <Text className="text-orange-500 font-bold text-center">🗺️ Traçar Rota para a Barbearia</Text>
+                </TouchableOpacity>
+            </View>
           </View>
 
           <Text className="text-white text-xl font-bold px-6 mt-4 mb-4">Catálogo de Serviços</Text>

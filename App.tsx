@@ -4,6 +4,7 @@ import { NativeWindStyleSheet } from "nativewind";
 NativeWindStyleSheet.setOutput({
   default: "native",
 });
+import UserProfile from './src/screens/UserProfile';
 import ManageProducts from './src/screens/ManageProducts';
 import ManageStoreOrders from './src/screens/ManageStoreOrders';
 import ManagePlans from './src/screens/ManagePlans';
@@ -113,6 +114,7 @@ export default function App() {
             <Stack.Screen name="ManagePlans" component={ManagePlans} /> 
             <Stack.Screen name="ManageProducts" component={ManageProducts} />
             <Stack.Screen name="ManageStoreOrders" component={ManageStoreOrders} />
+            <Stack.Screen name="UserProfile" component={UserProfile} />
           </>
         ) : (
           <Stack.Group screenOptions={{ headerShown: false }}>
