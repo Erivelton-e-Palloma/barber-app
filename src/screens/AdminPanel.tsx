@@ -157,6 +157,20 @@ export default function AdminPanel() {
           <Text className="text-zinc-400 text-sm">Criar e editar pacotes de assinatura</Text>
         </View>
       </TouchableOpacity>
+      <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageProducts')}>
+        <Text className="text-2xl mr-4">🛍️</Text>
+        <View>
+          <Text className="text-white font-bold text-lg">Lojinha (Produtos)</Text>
+          <Text className="text-zinc-400 text-sm">Controle de estoque e vendas</Text>
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl mb-3 flex-row items-center border border-zinc-700" onPress={() => navigation.navigate('ManageStoreOrders')}>
+        <Text className="text-2xl mr-4">📦</Text>
+        <View>
+          <Text className="text-white font-bold text-lg">Pedidos da Lojinha</Text>
+          <Text className="text-zinc-400 text-sm">Aprovar vendas e conferir Pix</Text>
+        </View>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

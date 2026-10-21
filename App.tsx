@@ -4,6 +4,8 @@ import { NativeWindStyleSheet } from "nativewind";
 NativeWindStyleSheet.setOutput({
   default: "native",
 });
+import ManageProducts from './src/screens/ManageProducts';
+import ManageStoreOrders from './src/screens/ManageStoreOrders';
 import ManagePlans from './src/screens/ManagePlans';
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
@@ -109,6 +111,8 @@ export default function App() {
             <Stack.Screen name="CustomersList" component={CustomersList} />
             <Stack.Screen name="ManageVIPs" component={ManageVIPs} />
             <Stack.Screen name="ManagePlans" component={ManagePlans} /> 
+            <Stack.Screen name="ManageProducts" component={ManageProducts} />
+            <Stack.Screen name="ManageStoreOrders" component={ManageStoreOrders} />
           </>
         ) : (
           <Stack.Group screenOptions={{ headerShown: false }}>
