@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform, SectionList } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform, SectionList, Modal, TextInput } from 'react-native';
 import { db, auth } from '../config/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, increment, addDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function MyAppointments({ navigation }: any) {
   const [appointmentSections, setAppointmentSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  // ESTADOS DA AVALIAÇÃO (FASE 7)
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingAppt, setRatingAppt] = useState<any>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   async function fetchAppointments() {
     setLoading(true);
@@ -26,7 +33,6 @@ export default function MyAppointments({ navigation }: any) {
 
       if (shopSnap.exists()) {
           const shopData = shopSnap.data();
-          // Verificação dupla para garantir que o Dono seja reconhecido e veja a agenda toda
           if (user.email?.toLowerCase() === shopData.ownerEmail?.toLowerCase() || user.email?.toLowerCase() === shopData.emailDono?.toLowerCase()) {
               userIsAdmin = true;
           }
@@ -34,7 +40,6 @@ export default function MyAppointments({ navigation }: any) {
       setIsSuperAdmin(userIsAdmin);
 
       let q;
-      // O Dono vê todos os agendamentos daquela barbearia. O cliente vê apenas os dele.
       if (userIsAdmin) {
           q = query(collection(db, "agendamentos"), where("shopId", "==", shopId));
       } else {
@@ -47,20 +52,17 @@ export default function MyAppointments({ navigation }: any) {
         ...doc.data()
       }));
 
-      // Ordena por data e depois por horário
       list.sort((a: any, b: any) => {
         if (a.data !== b.data) return a.data.localeCompare(b.data);
         return a.horario.localeCompare(b.horario);
       });
 
-      // Agrupa os agendamentos pela Data
       const groupedData = list.reduce((acc: any, curr: any) => {
           if (!acc[curr.data]) acc[curr.data] = [];
           acc[curr.data].push(curr);
           return acc;
       }, {});
 
-      // Transforma o objeto num array que o SectionList entende
       const sections = Object.keys(groupedData).map(dateKey => {
           const [year, month, day] = dateKey.split('-');
           return {
@@ -77,7 +79,6 @@ export default function MyAppointments({ navigation }: any) {
     }
   }
 
-  // Atualiza a agenda sempre que a tela for aberta
   useEffect(() => {
     fetchAppointments();
   }, []);
@@ -85,15 +86,12 @@ export default function MyAppointments({ navigation }: any) {
   async function confirmAndCancel(id: string) {
       try {
           await deleteDoc(doc(db, "agendamentos", id));
-          
-          // Remove da lista agrupada dinamicamente
           setAppointmentSections(prev => 
               prev.map(section => ({
                   ...section,
                   data: section.data.filter((item: any) => item.id !== id)
-              })).filter(section => section.data.length > 0) // Remove a seção se ficar vazia
+              })).filter(section => section.data.length > 0) 
           );
-          
           if (Platform.OS === 'web') alert("✅ Agendamento cancelado!");
           else Alert.alert("Sucesso", "Agendamento cancelado!");
       } catch (error) {
@@ -123,7 +121,6 @@ export default function MyAppointments({ navigation }: any) {
             });
         }
 
-        // Atualiza o status visualmente na SectionList
         setAppointmentSections(prev => prev.map(section => ({
             ...section,
             data: section.data.map((item: any) => 
@@ -135,9 +132,52 @@ export default function MyAppointments({ navigation }: any) {
         else Alert.alert("Sucesso", "Serviço concluído! O cliente ganhou +1 ponto.");
     } catch (error) {
         console.log("Erro ao concluir:", error);
-        if (Platform.OS === 'web') alert("Erro ao concluir.");
-        else Alert.alert("Erro", "Falha ao concluir o serviço.");
     }
+  }
+
+  // --- FUNÇÕES DA AVALIAÇÃO ---
+  function openRatingModal(item: any) {
+      setRatingAppt(item);
+      setRating(5);
+      setComment('');
+      setShowRatingModal(true);
+  }
+
+  async function submitRating() {
+      if (!ratingAppt) return;
+      setIsSubmittingRating(true);
+      try {
+          // 1. Salva a avaliação na coleção
+          await addDoc(collection(db, "avaliacoes"), {
+              shopId: ratingAppt.shopId,
+              barbeiroId: ratingAppt.barbeiroId,
+              clienteId: ratingAppt.clienteId,
+              clienteNome: ratingAppt.clienteNome || auth.currentUser?.email || "Cliente",
+              nota: rating,
+              comentario: comment,
+              dataAvaliacao: new Date().toISOString()
+          });
+
+          // 2. Marca o agendamento como avaliado para o botão sumir
+          await updateDoc(doc(db, "agendamentos", ratingAppt.id), { avaliado: true });
+
+          // 3. Atualiza a tela
+          setAppointmentSections(prev => prev.map(section => ({
+              ...section,
+              data: section.data.map((item: any) => 
+                  item.id === ratingAppt.id ? { ...item, avaliado: true } : item
+              )
+          })));
+
+          setShowRatingModal(false);
+          if (Platform.OS === 'web') alert("Avaliação enviada com sucesso!");
+          else Alert.alert("Sucesso", "Sua avaliação ajuda muito o profissional!");
+      } catch (error) {
+          console.log(error);
+          if (Platform.OS === 'web') alert("Erro ao avaliar.");
+      } finally {
+          setIsSubmittingRating(false);
+      }
   }
 
   return (
@@ -158,8 +198,6 @@ export default function MyAppointments({ navigation }: any) {
           sections={appointmentSections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
-          
-          // CABEÇALHO DIVISOR DE CADA DATA
           renderSectionHeader={({ section: { title } }) => (
             <View className="bg-orange-500/20 p-2 rounded-lg mb-3 mt-4 border border-orange-500/50">
                 <Text className="text-orange-500 font-bold text-center text-lg">📅 {title}</Text>
@@ -177,7 +215,6 @@ export default function MyAppointments({ navigation }: any) {
                         {item.servicoNome} {isConcluido && "✅"}
                     </Text>
                     
-                    {/* VISÃO DO DONO DA BARBEARIA */}
                     {isSuperAdmin && (
                         <View className="mt-1 bg-zinc-900/50 p-2 rounded border border-zinc-700">
                             <Text className="text-white font-bold text-sm">Cliente: {item.clienteNome || 'Não informado'}</Text>
@@ -188,7 +225,6 @@ export default function MyAppointments({ navigation }: any) {
                     <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
                   </View>
                   
-                  {/* VALORES E ETIQUETAS VIP / PIX */}
                   <View className="items-end">
                       <Text className="text-white font-bold text-xl">
                       R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
@@ -207,25 +243,34 @@ export default function MyAppointments({ navigation }: any) {
 
                 {!isConcluido ? (
                     <View className="flex-row justify-between gap-2">
-                        <TouchableOpacity 
-                            onPress={() => handleCancel(item.id)}
-                            className="flex-1 bg-red-500/10 border border-red-500 p-3 rounded-lg items-center"
-                        >
+                        <TouchableOpacity onPress={() => handleCancel(item.id)} className="flex-1 bg-red-500/10 border border-red-500 p-3 rounded-lg items-center">
                             <Text className="text-red-500 font-bold">Cancelar</Text>
                         </TouchableOpacity>
 
                         {isSuperAdmin && (
-                            <TouchableOpacity 
-                                onPress={() => handleCompleteService(item.id, item.clienteId)}
-                                className="flex-1 bg-green-600 p-3 rounded-lg items-center"
-                            >
+                            <TouchableOpacity onPress={() => handleCompleteService(item.id, item.clienteId)} className="flex-1 bg-green-600 p-3 rounded-lg items-center">
                                 <Text className="text-white font-bold">Concluir ✅</Text>
                             </TouchableOpacity>
                         )}
                     </View>
                 ) : (
-                    <View className="bg-green-500/10 p-3 rounded-lg items-center border border-green-500/30">
-                        <Text className="text-green-400 font-bold">Serviço Finalizado</Text>
+                    <View className="mt-2">
+                        <View className="bg-green-500/10 p-3 rounded-lg items-center border border-green-500/30">
+                            <Text className="text-green-400 font-bold">Serviço Finalizado</Text>
+                        </View>
+                        
+                        {/* BOTÃO DE AVALIAR SÓ APARECE PARA O CLIENTE SE ELE AINDA NÃO AVALIOU */}
+                        {!isSuperAdmin && !item.avaliado && (
+                            <TouchableOpacity onPress={() => openRatingModal(item)} className="mt-2 bg-orange-500 p-3 rounded-lg items-center shadow-lg">
+                                <Text className="text-white font-bold">Avaliar Atendimento ⭐</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {!isSuperAdmin && item.avaliado && (
+                            <View className="mt-2 bg-orange-500/10 p-3 rounded-lg items-center border border-orange-500/30">
+                                <Text className="text-orange-400 font-bold text-xs">Avaliação Enviada ⭐</Text>
+                            </View>
+                        )}
                     </View>
                 )}
               </View>
@@ -236,6 +281,45 @@ export default function MyAppointments({ navigation }: any) {
           )}
         />
       )}
+
+      {/* MODAL DE ESTRELAS FASE 7 */}
+      <Modal visible={showRatingModal} transparent={true} animationType="slide">
+          <View className="flex-1 justify-end bg-black/80">
+              <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50">
+                  <Text className="text-2xl mb-2 text-center">✂️</Text>
+                  <Text className="text-white font-bold text-2xl text-center mb-2">Avaliar Atendimento</Text>
+                  <Text className="text-zinc-400 text-center mb-6">Como foi o seu corte com o profissional {ratingAppt?.barbeiroNome}?</Text>
+                  
+                  {/* SELETOR DE ESTRELAS */}
+                  <View className="flex-row justify-center gap-2 mb-6">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                          <TouchableOpacity key={star} onPress={() => setRating(star)}>
+                              <Text className={`text-5xl ${rating >= star ? 'text-orange-500' : 'text-zinc-700'}`}>★</Text>
+                          </TouchableOpacity>
+                      ))}
+                  </View>
+
+                  <TextInput
+                      value={comment}
+                      onChangeText={setComment}
+                      placeholder="Deixe um comentário (opcional)..."
+                      placeholderTextColor="#71717a"
+                      multiline
+                      className="bg-zinc-800 text-white p-4 rounded-xl mb-6 border border-zinc-700 min-h-[100px]"
+                      textAlignVertical="top"
+                  />
+
+                  <TouchableOpacity onPress={submitRating} disabled={isSubmittingRating} className="bg-orange-500 p-4 rounded-xl items-center mb-3">
+                      {isSubmittingRating ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Enviar Avaliação</Text>}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setShowRatingModal(false)} className="p-4 rounded-xl items-center mb-6">
+                      <Text className="text-red-400 font-bold">Cancelar</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
+
     </View>
   );
 }
