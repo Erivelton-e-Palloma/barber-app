@@ -216,7 +216,6 @@ export default function Home({ navigation }: any) {
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
       
-      {/* CABEÇALHO */}
       <View className="flex-row justify-between items-start mb-6">
         <View className="flex-row items-center flex-1">
           {shopLogo ? <Image source={{ uri: shopLogo }} className="w-12 h-12 rounded-full mr-3 border border-orange-500" /> : <Text className="text-3xl mr-3">💈</Text>}
@@ -230,19 +229,18 @@ export default function Home({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* AVISO VIP */}
       {isVIP && diasVencimentoVIP !== null && (
           <View className={`p-4 rounded-xl mb-4 border ${diasVencimentoVIP <= 5 ? 'bg-red-500/10 border-red-500' : 'bg-yellow-500/10 border-yellow-500'}`}>
               <Text className={`font-bold ${diasVencimentoVIP <= 5 ? 'text-red-400' : 'text-yellow-500'}`}>{diasVencimentoVIP <= 0 ? '⚠️ Sua assinatura VIP venceu! Renove com o barbeiro.' : `👑 Você é VIP! Plano: ${planoAtual} (Vence em ${diasVencimentoVIP} dias).`}</Text>
           </View>
       )}
 
-      {/* 1. BARBEIROS (AGENDAMENTO PRINCIPAL) */}
+      {/* 1. BARBEIROS */}
       <View className="mb-6">
           <Text className="text-white text-xl font-bold mb-4">Escolha um Profissional</Text>
           <View className="flex-row flex-wrap gap-4">
             {barbers.map(item => (
-                <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700 w-full lg:w-[48%]">
+                <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700 flex-1 min-w-[280px] max-w-[400px]">
                     <Image source={{ uri: item.foto }} className="w-16 h-16 rounded-full mr-4 bg-zinc-700 border border-zinc-600" />
                     <View className="flex-1">
                         <Text className="text-white font-bold text-lg">{item.nome}</Text>
@@ -272,13 +270,14 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {/* 4. PLANOS VIP */}
+      {/* 4. PLANOS VIP EM GRID (NOVO) */}
       {!isVIP && !isOwner && planosVipDinamicos.length > 0 && (
           <View className="mb-8">
               <Text className="text-white text-xl font-bold mb-3">Planos de Assinatura 👑</Text>
               <Text className="text-zinc-400 text-sm mb-4">Seja VIP, pague por mês e não se preocupe com taxas.</Text>
-              <FlatList horizontal showsHorizontalScrollIndicator={false} data={planosVipDinamicos} keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => {
+              
+              <View className="flex-row flex-wrap gap-4">
+                  {planosVipDinamicos.map((item) => {
                       const isSuper = item.liberaTodos;
                       let valorOriginal = 0;
                       if (!isSuper && item.itens) {
@@ -292,10 +291,10 @@ export default function Home({ navigation }: any) {
                       const isBloqueado = pedidoPendenteId !== null && pedidoPendenteId !== item.id;
 
                       return (
-                          <View className="bg-zinc-800 border border-yellow-500/50 p-4 rounded-xl mr-4 w-64 justify-between">
+                          <View key={item.id} className="bg-zinc-800 border border-yellow-500/50 p-4 rounded-xl flex-1 min-w-[260px] max-w-[350px] justify-between">
                               <View>
                                   <Text className="text-yellow-500 font-bold text-lg mb-1">{item.nome}</Text>
-                                  <Text className="text-zinc-300 text-sm mb-2 h-10">{item.itens}</Text>
+                                  <Text className="text-zinc-300 text-sm mb-2 min-h-[40px]">{item.itens}</Text>
                                   {isSuper ? ( <View className="mb-3 h-12 justify-center"><Text className="text-green-400 font-bold text-xs bg-green-400/10 self-start px-2 py-1 rounded">🔥 Acesso Livre</Text></View>
                                   ) : temEconomia ? (
                                       <View className="mb-3 h-12 justify-center">
@@ -310,12 +309,12 @@ export default function Home({ navigation }: any) {
                               </TouchableOpacity>
                           </View>
                       );
-                  }}
-              />
+                  })}
+              </View>
           </View>
       )}
 
-      {/* 5. LOJINHA NO FINAL */}
+      {/* 5. LOJINHA EM GRID (NOVO) */}
       {!isOwner && produtosLojinha.length > 0 && (
           <View className="mb-10">
               <View className="flex-row justify-between items-center mb-3">
@@ -326,9 +325,9 @@ export default function Home({ navigation }: any) {
               </View>
               <Text className="text-zinc-400 text-sm mb-4">Pague via Pix e retire na sua visita.</Text>
               
-              <FlatList horizontal showsHorizontalScrollIndicator={false} data={produtosLojinha} keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                      <View className="bg-zinc-800 border border-zinc-700 p-4 rounded-xl mr-4 w-48">
+              <View className="flex-row flex-wrap gap-4">
+                  {produtosLojinha.map((item) => (
+                      <View key={item.id} className="bg-zinc-800 border border-zinc-700 p-4 rounded-xl flex-1 min-w-[160px] max-w-[220px]">
                           {item.imagemUrl ? <Image source={{ uri: item.imagemUrl }} className="w-full h-32 rounded-lg mb-3 bg-zinc-700" resizeMode="cover" /> : <View className="w-full h-32 rounded-lg mb-3 bg-zinc-700 items-center justify-center"><Text className="text-4xl">📦</Text></View>}
                           <Text className="text-white font-bold text-lg mb-1 truncate" numberOfLines={1}>{item.nome}</Text>
                           <Text className="text-zinc-400 text-xs mb-1 h-8" numberOfLines={2}>{item.descricao || 'Sem descrição'}</Text>
@@ -338,14 +337,14 @@ export default function Home({ navigation }: any) {
                           <Text className="text-orange-500 font-bold text-xl mb-4">R$ {item.preco?.toFixed(2)}</Text>
                           <TouchableOpacity onPress={() => openProductModal(item)} className="bg-orange-500 p-3 rounded-lg items-center"><Text className="text-white font-bold">Comprar</Text></TouchableOpacity>
                       </View>
-                  )}
-              />
+                  ))}
+              </View>
           </View>
       )}
 
       {/* MODAIS (MANTIDOS IGUAIS) */}
       <Modal visible={showPlanModal} transparent={true} animationType="slide">
-          <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50"><Text className="text-2xl mb-2 text-center">👑</Text><Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text><Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">1. Realize o pagamento via Pix:</Text><Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View></View><TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">{isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
+          <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50"><Text className="text-2xl mb-2 text-center">👑</Text><Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text><Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">Realize o pagamento via Pix:</Text><Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View></View><TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">{isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
       </Modal>
 
       <Modal visible={showProductModal} transparent={true} animationType="slide">
