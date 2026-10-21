@@ -23,7 +23,6 @@ export default function Booking({ route, navigation }: any) {
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0); 
   
-  // ESTADOS DO CONTRATO
   const [showContract, setShowContract] = useState(false);
 
   const monthNames = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
@@ -89,11 +88,12 @@ export default function Booking({ route, navigation }: any) {
     setBusyTimes([]); 
     setSelectedTime(null); 
     try {
+        // SISTEMA ANTI-FRAUDE: Bloqueia a agenda tanto para quem já foi aprovado quanto para quem está aguardando
         const q = query(
             collection(db, "agendamentos"),
             where("barbeiroId", "==", barber.id),
             where("data", "==", date),
-            where("status", "==", "agendado") 
+            where("status", "in", ["agendado", "confirmado", "aguardando_pix"]) 
         );
         const querySnapshot = await getDocs(q);
         const times = querySnapshot.docs.map(doc => doc.data().horario);
@@ -125,39 +125,34 @@ export default function Booking({ route, navigation }: any) {
       } catch (error) { console.log("Erro notificação:", error); }
   }
 
- // --- NOVA LÓGICA DE TRAVA DE ESCOPO VIP & SUPER ASSINATURA ---
   const isVIPActive = userData?.isVIP || false;
   const planoDoCliente = userData?.vipPlanName || '';
   const planoItens = userData?.vipPlanItens || userData?.vipPlanName || ''; 
-  const liberaTodos = userData?.vipLiberaTodos || false; // VERIFICA SE É SUPER ASSINATURA
+  const liberaTodos = userData?.vipLiberaTodos || false; 
 
   const checkServiceCovered = (servicoStr: string, itensStr: string, superVIP: boolean) => {
-      if (superVIP) return true; // SE A FLAG FOR TRUE, LIBERA QUALQUER SERVIÇO IMEDIATAMENTE
+      if (superVIP) return true; 
       if (!itensStr) return false;
 
       const s = servicoStr.toLowerCase();
       const i = itensStr.toLowerCase();
 
-      // Fallback manual antigo por segurança
       if (i.includes('master') || i.includes('manual')) return true;
 
-      // Busca Inteligente: Divide o nome do serviço em palavras principais
-      // Ex: "Corte Degradê" -> ['degradê'] e procura se essa palavra existe na descrição do plano.
       const palavrasServico = s.split(/\s+/).filter(word => word.length > 3 && word !== 'corte');
       
       if (palavrasServico.length === 0) {
-           return i.includes(s); // Se o serviço se chamar só "Pé", valida direto.
+           return i.includes(s); 
       }
 
       for (let word of palavrasServico) {
-           if (i.includes(word)) return true; // Se achar a palavra chave, libera.
+           if (i.includes(word)) return true; 
       }
 
       return false; 
   };
 
   const isServiceCovered = isVIPActive ? checkServiceCovered(service.nome, planoItens, liberaTodos) : false;
-  // --------------------------------------------------------------
 
   function openContract() {
     if (!selectedDate || !selectedTime) {
@@ -185,6 +180,9 @@ export default function Booking({ route, navigation }: any) {
         return;
       }
 
+      // SISTEMA ANTI-FRAUDE: VIPs entram confirmados. Clientes normais entram aguardando Pix.
+      const initialStatus = isServiceCovered ? 'confirmado' : 'aguardando_pix';
+
       await addDoc(collection(db, "agendamentos"), {
         clienteId: auth.currentUser?.uid,
         clienteEmail: auth.currentUser?.email,
@@ -201,8 +199,8 @@ export default function Booking({ route, navigation }: any) {
         horario: selectedTime,
         metodoPagamento: paymentMethod,
         entradaPaga: true, 
-        isVIPBooking: isServiceCovered, // Registra no banco se foi um agendamento isento pelo VIP
-        status: 'agendado',
+        isVIPBooking: isServiceCovered, 
+        status: initialStatus,
         shopId: shopId,
         shopName: shopName,
         createdAt: new Date().toISOString()
@@ -211,10 +209,10 @@ export default function Booking({ route, navigation }: any) {
       scheduleAppointmentReminder();
 
       if (Platform.OS === 'web') {
-          alert("Agendamento Confirmado! ✅\nO barbeiro já foi notificado no sistema.");
+          alert("Agendamento Solicitado! ✅\nAcompanhe o status nos seus Agendamentos.");
           navigation.navigate('Home');
       } else {
-          Alert.alert("Sucesso! ✅", "Agendamento confirmado. O barbeiro já recebeu seu horário no sistema.", [
+          Alert.alert("Sucesso! ✅", "Agendamento solicitado. Acompanhe o status na aba Meus Agendamentos.", [
               { text: "OK", onPress: () => navigation.navigate('Home') }
           ]);
       }
@@ -233,7 +231,6 @@ export default function Booking({ route, navigation }: any) {
 
   const isButtonEnabled = () => {
       if (loading || !selectedDate || !selectedTime || !userData) return false;
-      // Agora o botão só bloqueia se o serviço NÃO estiver coberto e o pix NÃO tiver sido confirmado
       if (!isServiceCovered && !pixConfirmado) return false;
       return true;
   };
@@ -333,10 +330,8 @@ export default function Booking({ route, navigation }: any) {
                   )}
               </View>
 
-              {/* LÓGICA VIP ATUALIZADA: VERIFICA SE O SERVIÇO FAZ PARTE DO PLANO */}
               {!isServiceCovered ? (
                   <>
-                    {/* Alerta caso seja VIP mas o serviço for extra */}
                     {isVIPActive && (
                         <View className="bg-orange-500/10 border border-orange-500 p-3 rounded-xl mb-4">
                             <Text className="text-orange-500 font-bold mb-1">👑 VIP: Serviço Extra</Text>
@@ -386,7 +381,6 @@ export default function Booking({ route, navigation }: any) {
         }
       />
 
-      {/* MODAL DO CONTRATO DE AGENDAMENTO */}
       <Modal
         visible={showContract}
         transparent={true}
@@ -399,12 +393,12 @@ export default function Booking({ route, navigation }: any) {
                   
                   <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
                       <Text className="text-zinc-300 mb-3 leading-6">
-                          <Text className="text-white font-bold">1. Atrasos:</Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
+                          <Text className="text-white font-bold">1. Atrasos: </Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
                       </Text>
                       
                       {!isServiceCovered && (
                           <Text className="text-zinc-300 leading-6">
-                              <Text className="text-white font-bold">2. Cancelamentos e Faltas:</Text> O valor de 50% (R$ {valorEntrada.toFixed(2)}) pago na entrada é uma <Text className="text-red-400 font-bold">taxa de marcação</Text>. Em caso de falta ou cancelamento em cima da hora, este valor não será reembolsado.
+                              <Text className="text-white font-bold">2. Confirmação e Faltas:</Text> O seu horário só será garantido após a <Text className="text-orange-500 font-bold">aprovação do Pix</Text> pelo barbeiro. O valor de 50% pago na entrada não será reembolsado em caso de falta ou atraso.
                           </Text>
                       )}
                   </View>

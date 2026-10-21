@@ -237,7 +237,7 @@ export default function Home({ navigation }: any) {
 
       {/* 1. BARBEIROS */}
       <View className="mb-6">
-          <Text className="text-white text-xl font-bold mb-4">Escolha um Profissional</Text>
+          <Text className="text-white text-xl font-bold mb-4">Escolha um Barbeiro(a)</Text>
           <View className="flex-row flex-wrap gap-4">
             {barbers.map(item => (
                 <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700 flex-1 min-w-[280px] max-w-[400px]">

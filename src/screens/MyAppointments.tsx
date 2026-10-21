@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform, SectionList, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Platform, SectionList, Modal, TextInput, FlatList } from 'react-native';
 import { db, auth } from '../config/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, increment, addDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
@@ -9,7 +9,11 @@ export default function MyAppointments({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  // ESTADOS DA AVALIAÇÃO (FASE 7)
+  // --- ESTADOS DOS FILTROS (NOVO) ---
+  const [availableMonths, setAvailableMonths] = useState<string[]>(['Todos']);
+  const [filterMonth, setFilterMonth] = useState('Todos');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingAppt, setRatingAppt] = useState<any>(null);
   const [rating, setRating] = useState(5);
@@ -53,20 +57,47 @@ export default function MyAppointments({ navigation }: any) {
       }));
 
       list.sort((a: any, b: any) => {
-        if (a.data !== b.data) return a.data.localeCompare(b.data);
-        return a.horario.localeCompare(b.horario);
+        const dateA = a.data || "0000-00-00";
+        const dateB = b.data || "0000-00-00";
+        const timeA = a.horario || "00:00";
+        const timeB = b.horario || "00:00";
+
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+        return timeA.localeCompare(timeB);
       });
 
+      // --- EXTRAIR OS MESES DISPONÍVEIS PARA O FILTRO ---
+      const monthsSet = new Set<string>();
+      list.forEach((item: any) => {
+          if (item.data && item.data !== "0000-00-00") {
+              const parts = item.data.split('-');
+              if (parts.length === 3) monthsSet.add(`${parts[1]}/${parts[0]}`); // MM/YYYY
+          } else {
+              monthsSet.add("Antigos");
+          }
+      });
+      setAvailableMonths(['Todos', ...Array.from(monthsSet)].sort((a, b) => {
+          if (a === 'Todos') return -1;
+          if (b === 'Todos') return 1;
+          return a.localeCompare(b);
+      }));
+      // ---------------------------------------------------
+
       const groupedData = list.reduce((acc: any, curr: any) => {
-          if (!acc[curr.data]) acc[curr.data] = [];
-          acc[curr.data].push(curr);
+          const dateStr = curr.data || "Data Indefinida";
+          if (!acc[dateStr]) acc[dateStr] = [];
+          acc[dateStr].push(curr);
           return acc;
       }, {});
 
       const sections = Object.keys(groupedData).map(dateKey => {
-          const [year, month, day] = dateKey.split('-');
+          if (dateKey === "Data Indefinida" || dateKey === "0000-00-00") {
+              return { title: "Agendamentos Antigos/Teste", data: groupedData[dateKey] };
+          }
+          const parts = dateKey.split('-');
+          const title = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateKey;
           return {
-              title: `${day}/${month}/${year}`,
+              title: title,
               data: groupedData[dateKey]
           };
       });
@@ -111,6 +142,24 @@ export default function MyAppointments({ navigation }: any) {
     }
   }
 
+  async function handleApprovePix(id: string) {
+      try {
+          await updateDoc(doc(db, "agendamentos", id), { status: "confirmado" });
+          
+          setAppointmentSections(prev => prev.map(section => ({
+              ...section,
+              data: section.data.map((item: any) => 
+                  item.id === id ? { ...item, status: "confirmado" } : item
+              )
+          })));
+
+          if (Platform.OS === 'web') alert("Pix Aprovado! Horário confirmado para o cliente.");
+          else Alert.alert("Sucesso", "Pix Aprovado! Horário confirmado para o cliente.");
+      } catch (error) {
+          console.log("Erro ao aprovar:", error);
+      }
+  }
+
   async function handleCompleteService(agendamentoId: string, clienteId: string) {
     try {
         await updateDoc(doc(db, "agendamentos", agendamentoId), { status: "concluido" });
@@ -135,7 +184,6 @@ export default function MyAppointments({ navigation }: any) {
     }
   }
 
-  // --- FUNÇÕES DA AVALIAÇÃO ---
   function openRatingModal(item: any) {
       setRatingAppt(item);
       setRating(5);
@@ -147,7 +195,6 @@ export default function MyAppointments({ navigation }: any) {
       if (!ratingAppt) return;
       setIsSubmittingRating(true);
       try {
-          // 1. Salva a avaliação na coleção
           await addDoc(collection(db, "avaliacoes"), {
               shopId: ratingAppt.shopId,
               barbeiroId: ratingAppt.barbeiroId,
@@ -158,10 +205,8 @@ export default function MyAppointments({ navigation }: any) {
               dataAvaliacao: new Date().toISOString()
           });
 
-          // 2. Marca o agendamento como avaliado para o botão sumir
           await updateDoc(doc(db, "agendamentos", ratingAppt.id), { avaliado: true });
 
-          // 3. Atualiza a tela
           setAppointmentSections(prev => prev.map(section => ({
               ...section,
               data: section.data.map((item: any) => 
@@ -180,6 +225,32 @@ export default function MyAppointments({ navigation }: any) {
       }
   }
 
+  // --- LÓGICA DE FILTRAGEM DOS DADOS ---
+  const filteredSections = appointmentSections.map(section => {
+      // 1. Filtra os itens por texto (nome cliente, servico ou data)
+      const filteredData = section.data.filter((item: any) => {
+          const search = searchQuery.toLowerCase();
+          const matchesSearch = 
+              (item.clienteNome || '').toLowerCase().includes(search) ||
+              (item.servicoNome || '').toLowerCase().includes(search) ||
+              (item.barbeiroNome || '').toLowerCase().includes(search) ||
+              section.title.toLowerCase().includes(search);
+          return matchesSearch;
+      });
+      return { ...section, data: filteredData };
+  }).filter(section => {
+      // 2. Remove seções vazias e aplica o filtro de Mês
+      if (section.data.length === 0) return false;
+      if (filterMonth === 'Todos') return true;
+      if (section.title === 'Agendamentos Antigos/Teste') return filterMonth === 'Antigos';
+
+      const parts = section.title.split('/');
+      if (parts.length === 3) {
+          return `${parts[1]}/${parts[2]}` === filterMonth;
+      }
+      return false;
+  });
+
   return (
     <View className="flex-1 bg-zinc-900 px-6 pt-12">
       <View className="flex-row items-center mb-6">
@@ -191,11 +262,39 @@ export default function MyAppointments({ navigation }: any) {
         </Text>
       </View>
 
+      {/* ÁREA DE FILTROS E PESQUISA */}
+      <View className="mb-6 z-10">
+          <TextInput
+              placeholder={isSuperAdmin ? "Buscar cliente, dia (ex: 21/10) ou serviço..." : "Buscar data ou serviço..."}
+              placeholderTextColor="#71717a"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              className="bg-zinc-800 text-white px-4 py-3 rounded-xl border border-zinc-700 mb-3"
+          />
+          
+          <View>
+              <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={availableMonths}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => (
+                      <TouchableOpacity 
+                          onPress={() => setFilterMonth(item)}
+                          className={`px-4 py-2 rounded-full mr-2 border ${filterMonth === item ? 'bg-orange-500 border-orange-500' : 'bg-zinc-800 border-zinc-700'}`}
+                      >
+                          <Text className={`font-bold ${filterMonth === item ? 'text-white' : 'text-zinc-400'}`}>{item}</Text>
+                      </TouchableOpacity>
+                  )}
+              />
+          </View>
+      </View>
+
       {loading ? (
         <ActivityIndicator size="large" color="#f97316" className="mt-10" />
       ) : (
         <SectionList
-          sections={appointmentSections}
+          sections={filteredSections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
           renderSectionHeader={({ section: { title } }) => (
@@ -206,13 +305,15 @@ export default function MyAppointments({ navigation }: any) {
 
           renderItem={({ item }) => {
             const isConcluido = item.status === 'concluido';
+            const isAguardando = item.status === 'aguardando_pix';
+            const isConfirmado = item.status === 'confirmado' || item.status === 'agendado';
 
             return (
               <View className={`p-4 rounded-xl mb-4 border ${isConcluido ? 'bg-zinc-900 border-green-500/50' : 'bg-zinc-800 border-zinc-700'}`}>
                 <View className="flex-row justify-between items-start mb-2">
                   <View className="flex-1 pr-2">
                     <Text className={`${isConcluido ? 'text-green-500' : 'text-orange-500'} font-bold text-lg`}>
-                        {item.servicoNome} {isConcluido && "✅"}
+                        {item.servicoNome || "Serviço não informado"} {isConcluido && "✅"}
                     </Text>
                     
                     {isSuperAdmin && (
@@ -222,7 +323,7 @@ export default function MyAppointments({ navigation }: any) {
                         </View>
                     )}
                     
-                    <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
+                    <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome || "Não informado"}</Text>
                   </View>
                   
                   <View className="items-end">
@@ -232,23 +333,40 @@ export default function MyAppointments({ navigation }: any) {
                       {item.isVIPBooking ? (
                           <Text className="text-yellow-500 font-bold text-xs mt-1">👑 Isento via VIP</Text>
                       ) : item.entradaPaga && !isConcluido ? (
-                          <Text className="text-green-500 font-bold text-xs mt-1">✅ 50% no Pix</Text>
+                          <Text className="text-zinc-400 font-bold text-xs mt-1">50% no Pix</Text>
                       ) : null}
                   </View>
                 </View>
 
+                {!isSuperAdmin && isAguardando && (
+                    <View className="bg-yellow-500/10 p-2 rounded-lg items-center border border-yellow-500/30 mb-3 mt-1">
+                        <Text className="text-yellow-500 font-bold text-xs">⏳ Aguardando barbeiro confirmar o Pix...</Text>
+                    </View>
+                )}
+                {!isSuperAdmin && isConfirmado && (
+                    <View className="bg-green-500/10 p-2 rounded-lg items-center border border-green-500/30 mb-3 mt-1">
+                        <Text className="text-green-500 font-bold text-xs">✅ Horário Confirmado!</Text>
+                    </View>
+                )}
+
                 <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2 border border-zinc-700">
-                  <Text className="text-white font-bold">⏰ {item.horario}</Text>
+                  <Text className="text-white font-bold">⏰ {item.horario || "Horário Indefinido"}</Text>
                 </View>
 
                 {!isConcluido ? (
-                    <View className="flex-row justify-between gap-2">
-                        <TouchableOpacity onPress={() => handleCancel(item.id)} className="flex-1 bg-red-500/10 border border-red-500 p-3 rounded-lg items-center">
+                    <View className="flex-row justify-between gap-2 flex-wrap">
+                        <TouchableOpacity onPress={() => handleCancel(item.id)} className="flex-1 min-w-[100px] bg-red-500/10 border border-red-500 p-3 rounded-lg items-center">
                             <Text className="text-red-500 font-bold">Cancelar</Text>
                         </TouchableOpacity>
 
-                        {isSuperAdmin && (
-                            <TouchableOpacity onPress={() => handleCompleteService(item.id, item.clienteId)} className="flex-1 bg-green-600 p-3 rounded-lg items-center">
+                        {isSuperAdmin && isAguardando && (
+                            <TouchableOpacity onPress={() => handleApprovePix(item.id)} className="flex-1 min-w-[100px] bg-blue-600 p-3 rounded-lg items-center">
+                                <Text className="text-white font-bold">Aprovar Pix ✅</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {isSuperAdmin && isConfirmado && (
+                            <TouchableOpacity onPress={() => handleCompleteService(item.id, item.clienteId)} className="flex-1 min-w-[100px] bg-green-600 p-3 rounded-lg items-center">
                                 <Text className="text-white font-bold">Concluir ✅</Text>
                             </TouchableOpacity>
                         )}
@@ -259,7 +377,6 @@ export default function MyAppointments({ navigation }: any) {
                             <Text className="text-green-400 font-bold">Serviço Finalizado</Text>
                         </View>
                         
-                        {/* BOTÃO DE AVALIAR SÓ APARECE PARA O CLIENTE SE ELE AINDA NÃO AVALIOU */}
                         {!isSuperAdmin && !item.avaliado && (
                             <TouchableOpacity onPress={() => openRatingModal(item)} className="mt-2 bg-orange-500 p-3 rounded-lg items-center shadow-lg">
                                 <Text className="text-white font-bold">Avaliar Atendimento ⭐</Text>
@@ -277,12 +394,14 @@ export default function MyAppointments({ navigation }: any) {
             );
           }}
           ListEmptyComponent={() => (
-            <Text className="text-zinc-500 text-center mt-10">Nenhum agendamento encontrado.</Text>
+            <Text className="text-zinc-500 text-center mt-10">
+                {searchQuery || filterMonth !== 'Todos' ? 'Nenhum agendamento encontrado para esta pesquisa.' : 'Nenhum agendamento encontrado.'}
+            </Text>
           )}
         />
       )}
 
-      {/* MODAL DE ESTRELAS FASE 7 */}
+      {/* MODAL DE ESTRELAS (MANTIDO IGUAL) */}
       <Modal visible={showRatingModal} transparent={true} animationType="slide">
           <View className="flex-1 justify-end bg-black/80">
               <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50">
@@ -290,7 +409,6 @@ export default function MyAppointments({ navigation }: any) {
                   <Text className="text-white font-bold text-2xl text-center mb-2">Avaliar Atendimento</Text>
                   <Text className="text-zinc-400 text-center mb-6">Como foi o seu corte com o profissional {ratingAppt?.barbeiroNome}?</Text>
                   
-                  {/* SELETOR DE ESTRELAS */}
                   <View className="flex-row justify-center gap-2 mb-6">
                       {[1, 2, 3, 4, 5].map((star) => (
                           <TouchableOpacity key={star} onPress={() => setRating(star)}>
@@ -319,7 +437,6 @@ export default function MyAppointments({ navigation }: any) {
               </View>
           </View>
       </Modal>
-
     </View>
   );
 }
