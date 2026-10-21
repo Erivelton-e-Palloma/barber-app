@@ -5,7 +5,6 @@ import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc, i
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 export default function MyAppointments({ navigation }: any) {
-  // NOVO: Agora guardamos as seções agrupadas (Ex: [{ title: '18/10', data: [...] }])
   const [appointmentSections, setAppointmentSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -27,11 +26,15 @@ export default function MyAppointments({ navigation }: any) {
 
       if (shopSnap.exists()) {
           const shopData = shopSnap.data();
-          if (user.email === shopData.emailDono) userIsAdmin = true;
+          // Verificação dupla para garantir que o Dono seja reconhecido e veja a agenda toda
+          if (user.email?.toLowerCase() === shopData.ownerEmail?.toLowerCase() || user.email?.toLowerCase() === shopData.emailDono?.toLowerCase()) {
+              userIsAdmin = true;
+          }
       }
       setIsSuperAdmin(userIsAdmin);
 
       let q;
+      // O Dono vê todos os agendamentos daquela barbearia. O cliente vê apenas os dele.
       if (userIsAdmin) {
           q = query(collection(db, "agendamentos"), where("shopId", "==", shopId));
       } else {
@@ -50,7 +53,7 @@ export default function MyAppointments({ navigation }: any) {
         return a.horario.localeCompare(b.horario);
       });
 
-      // NOVO: Agrupa os agendamentos pela Data
+      // Agrupa os agendamentos pela Data
       const groupedData = list.reduce((acc: any, curr: any) => {
           if (!acc[curr.data]) acc[curr.data] = [];
           acc[curr.data].push(curr);
@@ -74,6 +77,7 @@ export default function MyAppointments({ navigation }: any) {
     }
   }
 
+  // Atualiza a agenda sempre que a tela for aberta
   useEffect(() => {
     fetchAppointments();
   }, []);
@@ -142,13 +146,13 @@ export default function MyAppointments({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} className="mr-4">
           <Text className="text-orange-500 text-lg font-bold">← Voltar</Text>
         </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold">
-            {isSuperAdmin ? 'Gestão da Barbearia' : 'Meus Agendamentos'}
+        <Text className="text-white text-2xl font-bold flex-1">
+            {isSuperAdmin ? 'Agenda da Barbearia' : 'Meus Agendamentos'}
         </Text>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#f97316" />
+        <ActivityIndicator size="large" color="#f97316" className="mt-10" />
       ) : (
         <SectionList
           sections={appointmentSections}
@@ -173,6 +177,7 @@ export default function MyAppointments({ navigation }: any) {
                         {item.servicoNome} {isConcluido && "✅"}
                     </Text>
                     
+                    {/* VISÃO DO DONO DA BARBEARIA */}
                     {isSuperAdmin && (
                         <View className="mt-1 bg-zinc-900/50 p-2 rounded border border-zinc-700">
                             <Text className="text-white font-bold text-sm">Cliente: {item.clienteNome || 'Não informado'}</Text>
@@ -182,17 +187,21 @@ export default function MyAppointments({ navigation }: any) {
                     
                     <Text className="text-zinc-400 text-xs mt-2">Profissional: {item.barbeiroNome}</Text>
                   </View>
+                  
+                  {/* VALORES E ETIQUETAS VIP / PIX */}
                   <View className="items-end">
                       <Text className="text-white font-bold text-xl">
                       R$ {item.preco ? Number(item.preco).toFixed(2).replace('.', ',') : '0,00'}
                       </Text>
-                      {item.entradaPaga && !isConcluido && (
+                      {item.isVIPBooking ? (
+                          <Text className="text-yellow-500 font-bold text-xs mt-1">👑 Isento via VIP</Text>
+                      ) : item.entradaPaga && !isConcluido ? (
                           <Text className="text-green-500 font-bold text-xs mt-1">✅ 50% no Pix</Text>
-                      )}
+                      ) : null}
                   </View>
                 </View>
 
-                <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2">
+                <View className="flex-row items-center mb-4 bg-zinc-900/50 p-2 rounded-lg self-start mt-2 border border-zinc-700">
                   <Text className="text-white font-bold">⏰ {item.horario}</Text>
                 </View>
 
