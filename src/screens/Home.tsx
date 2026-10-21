@@ -3,7 +3,7 @@ import { ScrollView, View, Text, TouchableOpacity, FlatList, Image, Alert, Platf
 import { useFocusEffect } from '@react-navigation/native';
 import { signOut } from 'firebase/auth'; 
 import { auth, db } from '../config/firebase'; 
-import { collection, getDocs, query, where, doc, getDoc, addDoc, orderBy } from 'firebase/firestore'; 
+import { collection, getDocs, query, where, doc, getDoc, addDoc } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 
@@ -12,7 +12,7 @@ export default function Home({ navigation }: any) {
   const [planosVipDinamicos, setPlanosVipDinamicos] = useState<any[]>([]);
   const [servicosLoja, setServicosLoja] = useState<any[]>([]); 
   const [produtosLojinha, setProdutosLojinha] = useState<any[]>([]); 
-  const [meusPedidosLojinha, setMeusPedidosLojinha] = useState<any[]>([]); // NOVO: Histórico de compras
+  const [meusPedidosLojinha, setMeusPedidosLojinha] = useState<any[]>([]); 
   
   const [shopName, setShopName] = useState('');
   const [shopLogo, setShopLogo] = useState<string | null>(null); 
@@ -38,7 +38,7 @@ export default function Home({ navigation }: any) {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isBuyingProduct, setIsBuyingProduct] = useState(false);
 
-  const [showMyOrdersModal, setShowMyOrdersModal] = useState(false); // NOVO: Modal do Carrinho/Compras
+  const [showMyOrdersModal, setShowMyOrdersModal] = useState(false); 
 
   async function checkPermissionAndLoyalty() {
       const name = await AsyncStorage.getItem('@delp_shopName');
@@ -91,7 +91,7 @@ export default function Home({ navigation }: any) {
               if (!snapPendente.empty) setPedidoPendenteId(snapPendente.docs[0].data().planoId);
               else setPedidoPendenteId(null);
 
-              fetchMeusPedidosLojinha(currentUser.uid, shopId); // Busca as compras do cliente
+              fetchMeusPedidosLojinha(currentUser.uid, shopId); 
 
           } catch (error) { console.log("Erro:", error); }
       }
@@ -136,13 +136,11 @@ export default function Home({ navigation }: any) {
       } catch (error) { console.log(error); }
   }
 
-  // NOVO: Função para buscar as compras feitas por este cliente
   async function fetchMeusPedidosLojinha(userId: string, shopId: string) {
       try {
           const q = query(collection(db, "pedidos_lojinha"), where("clienteId", "==", userId), where("shopId", "==", shopId));
           const snap = await getDocs(q);
           const pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Ordena os mais recentes primeiro
           pedidos.sort((a, b) => new Date(b.dataPedido).getTime() - new Date(a.dataPedido).getTime());
           setMeusPedidosLojinha(pedidos);
       } catch (error) { console.log(error); }
@@ -188,7 +186,6 @@ export default function Home({ navigation }: any) {
       if (!userData || !selectedProduct) return;
       setIsBuyingProduct(true);
       try {
-          // CORREÇÃO DE SEGURANÇA: Registra o pedido, mas NÃO desconta do estoque ainda.
           await addDoc(collection(db, 'pedidos_lojinha'), {
               clienteId: userData.id,
               clienteNome: userData.nome || auth.currentUser?.email,
@@ -197,12 +194,12 @@ export default function Home({ navigation }: any) {
               produtoNome: selectedProduct.nome,
               precoPago: selectedProduct.preco,
               shopId: shopIdState,
-              status: 'aguardando_aprovacao', // O barbeiro precisa confirmar o pix
+              status: 'aguardando_aprovacao', 
               dataPedido: new Date().toISOString()
           });
 
           setShowProductModal(false);
-          fetchMeusPedidosLojinha(userData.id, shopIdState); // Atualiza o carrinho
+          fetchMeusPedidosLojinha(userData.id, shopIdState); 
           
           if (Platform.OS === 'web') alert("Pedido enviado! O barbeiro irá conferir o Pix e liberar seu produto.");
           else Alert.alert("Sucesso!", "Pedido enviado! O barbeiro irá conferir o Pix e liberar seu produto.");
@@ -211,7 +208,6 @@ export default function Home({ navigation }: any) {
 
   const progresso = Math.min((pontos / meta) * 100, 100);
 
-  // Formata a data para exibir no modal de compras
   const formatDataHora = (isoStr: string) => {
       const d = new Date(isoStr);
       return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} às ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -220,6 +216,7 @@ export default function Home({ navigation }: any) {
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
       
+      {/* CABEÇALHO */}
       <View className="flex-row justify-between items-start mb-6">
         <View className="flex-row items-center flex-1">
           {shopLogo ? <Image source={{ uri: shopLogo }} className="w-12 h-12 rounded-full mr-3 border border-orange-500" /> : <Text className="text-3xl mr-3">💈</Text>}
@@ -233,14 +230,51 @@ export default function Home({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* AVISO VIP */}
       {isVIP && diasVencimentoVIP !== null && (
           <View className={`p-4 rounded-xl mb-4 border ${diasVencimentoVIP <= 5 ? 'bg-red-500/10 border-red-500' : 'bg-yellow-500/10 border-yellow-500'}`}>
               <Text className={`font-bold ${diasVencimentoVIP <= 5 ? 'text-red-400' : 'text-yellow-500'}`}>{diasVencimentoVIP <= 0 ? '⚠️ Sua assinatura VIP venceu! Renove com o barbeiro.' : `👑 Você é VIP! Plano: ${planoAtual} (Vence em ${diasVencimentoVIP} dias).`}</Text>
           </View>
       )}
 
+      {/* 1. BARBEIROS (AGENDAMENTO PRINCIPAL) */}
+      <View className="mb-6">
+          <Text className="text-white text-xl font-bold mb-4">Escolha um Profissional</Text>
+          <View className="flex-row flex-wrap gap-4">
+            {barbers.map(item => (
+                <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl flex-row items-center border border-zinc-700 w-full lg:w-[48%]">
+                    <Image source={{ uri: item.foto }} className="w-16 h-16 rounded-full mr-4 bg-zinc-700 border border-zinc-600" />
+                    <View className="flex-1">
+                        <Text className="text-white font-bold text-lg">{item.nome}</Text>
+                        <Text className="text-zinc-400 text-sm">{item.especialidade}</Text>
+                        <Text className="text-orange-500 text-sm mt-1">⭐ {item.nota || "5.0"}</Text>
+                    </View>
+                </TouchableOpacity>
+            ))}
+          </View>
+      </View>
+
+      {/* 2. MEUS AGENDAMENTOS E PAINEL ADMIN */}
+      <View className="mb-8">
+        <TouchableOpacity className="bg-orange-500 p-4 rounded-xl mb-3 items-center shadow-lg" onPress={() => navigation.navigate('MyAppointments')}><Text className="text-white font-bold text-lg">📅 Meus Agendamentos</Text></TouchableOpacity>
+        {isOwner && <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl items-center border border-zinc-700" onPress={() => navigation.navigate('AdminPanel')}><Text className="text-orange-500 font-bold text-lg">⚙️ Painel Admin</Text></TouchableOpacity>}
+      </View>
+
+      {/* 3. CARTÃO FIDELIDADE */}
+      {fidelidadeAtiva && (
+          <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-8 border border-orange-500/30 shadow-lg">
+              <View className="flex-row justify-between items-center mb-3">
+                  <View className="flex-row items-center"><Text className="text-2xl mr-2">🎁</Text><Text className="text-white font-bold text-lg">Cartão Fidelidade</Text></View>
+                  <Text className="text-orange-500 font-bold text-xl">{pontos}/{meta}</Text>
+              </View>
+              <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2"><View className="h-full bg-orange-500 rounded-full" style={{ width: `${progresso}%` }} /></View>
+              {pontos >= meta ? <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Ganhou o prêmio!</Text> : <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o brinde.</Text>}
+          </View>
+      )}
+
+      {/* 4. PLANOS VIP */}
       {!isVIP && !isOwner && planosVipDinamicos.length > 0 && (
-          <View className="mb-6">
+          <View className="mb-8">
               <Text className="text-white text-xl font-bold mb-3">Planos de Assinatura 👑</Text>
               <Text className="text-zinc-400 text-sm mb-4">Seja VIP, pague por mês e não se preocupe com taxas.</Text>
               <FlatList horizontal showsHorizontalScrollIndicator={false} data={planosVipDinamicos} keyExtractor={(item) => item.id}
@@ -281,11 +315,11 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
+      {/* 5. LOJINHA NO FINAL */}
       {!isOwner && produtosLojinha.length > 0 && (
-          <View className="mb-6">
+          <View className="mb-10">
               <View className="flex-row justify-between items-center mb-3">
                   <Text className="text-white text-xl font-bold">Lojinha 🛍️</Text>
-                  {/* BOTÃO DO CARRINHO PARA O CLIENTE VER AS COMPRAS */}
                   <TouchableOpacity onPress={() => setShowMyOrdersModal(true)} className="bg-orange-500/20 px-3 py-1 rounded-lg border border-orange-500">
                       <Text className="text-orange-500 font-bold text-xs">🛒 Minhas Compras</Text>
                   </TouchableOpacity>
@@ -299,7 +333,6 @@ export default function Home({ navigation }: any) {
                           <Text className="text-white font-bold text-lg mb-1 truncate" numberOfLines={1}>{item.nome}</Text>
                           <Text className="text-zinc-400 text-xs mb-1 h-8" numberOfLines={2}>{item.descricao || 'Sem descrição'}</Text>
                           
-                          {/* MOSTRANDO A QUANTIDADE DE ESTOQUE DISPONÍVEL */}
                           <Text className="text-green-400 font-bold text-xs bg-green-400/10 self-start px-2 py-1 rounded mb-2">Disponível: {item.estoque}</Text>
                           
                           <Text className="text-orange-500 font-bold text-xl mb-4">R$ {item.preco?.toFixed(2)}</Text>
@@ -310,43 +343,15 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
-      {fidelidadeAtiva && (
-          <View className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-5 rounded-2xl mb-6 border border-orange-500/30 shadow-lg">
-              <View className="flex-row justify-between items-center mb-3">
-                  <View className="flex-row items-center"><Text className="text-2xl mr-2">🎁</Text><Text className="text-white font-bold text-lg">Cartão Fidelidade</Text></View>
-                  <Text className="text-orange-500 font-bold text-xl">{pontos}/{meta}</Text>
-              </View>
-              <View className="h-3 bg-zinc-700 rounded-full w-full overflow-hidden mb-2"><View className="h-full bg-orange-500 rounded-full" style={{ width: `${progresso}%` }} /></View>
-              {pontos >= meta ? <Text className="text-green-400 font-bold text-sm text-center mt-1">🎉 Parabéns! Ganhou o prêmio!</Text> : <Text className="text-zinc-400 text-sm">Faltam <Text className="text-white font-bold">{meta - pontos}</Text> cortes para o brinde.</Text>}
-          </View>
-      )}
-
-      <View className="mb-6">
-        <TouchableOpacity className="bg-orange-500 p-4 rounded-xl mb-3 items-center" onPress={() => navigation.navigate('MyAppointments')}><Text className="text-white font-bold text-lg">📅 Meus Agendamentos</Text></TouchableOpacity>
-        {isOwner && <TouchableOpacity className="bg-zinc-800 p-4 rounded-xl items-center border border-zinc-700" onPress={() => navigation.navigate('AdminPanel')}><Text className="text-orange-500 font-bold text-lg">⚙️ Painel Admin</Text></TouchableOpacity>}
-      </View>
-
-      <Text className="text-white text-xl font-bold mb-4">Nossos Barbeiros(as)</Text>
-      <View className="mb-10">
-        {barbers.map(item => (
-            <TouchableOpacity key={item.id} onPress={() => navigation.navigate('BarberProfile', { barber: item })} className="bg-zinc-800 p-4 rounded-xl mb-4 flex-row items-center border border-zinc-700">
-                <Image source={{ uri: item.foto }} className="w-16 h-16 rounded-full mr-4 bg-zinc-700 border border-zinc-600" />
-                <View><Text className="text-white font-bold text-lg">{item.nome}</Text><Text className="text-zinc-400 text-sm">{item.especialidade}</Text><Text className="text-orange-500 text-sm mt-1">⭐ {item.nota || "5.0"}</Text></View>
-            </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* MODAL DE PLANO VIP */}
+      {/* MODAIS (MANTIDOS IGUAIS) */}
       <Modal visible={showPlanModal} transparent={true} animationType="slide">
           <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50"><Text className="text-2xl mb-2 text-center">👑</Text><Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text><Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">1. Realize o pagamento via Pix:</Text><Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View></View><TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">{isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
       </Modal>
 
-      {/* MODAL DE PRODUTO */}
       <Modal visible={showProductModal} transparent={true} animationType="slide">
           <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50"><Text className="text-2xl mb-2 text-center">🛍️</Text><Text className="text-white font-bold text-2xl text-center mb-1">Comprar Produto</Text><Text className="text-zinc-400 text-center mb-6">{selectedProduct?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">Transfira o valor via Pix para garantir:</Text><Text className="text-orange-500 font-bold text-2xl mb-4">R$ {selectedProduct?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View><Text className="text-zinc-500 text-xs italic mt-2">O produto será reservado assim que o barbeiro confirmar o Pix.</Text></View><TouchableOpacity onPress={handleConfirmProductPurchase} disabled={isBuyingProduct} className="bg-orange-500 p-4 rounded-xl items-center mb-3">{isBuyingProduct ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowProductModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
       </Modal>
 
-      {/* NOVO: MODAL "MINHAS COMPRAS" (CARRINHO DO CLIENTE) */}
       <Modal visible={showMyOrdersModal} transparent={true} animationType="slide">
           <View className="flex-1 bg-zinc-900 pt-16 px-6">
               <View className="flex-row items-center justify-between mb-8">
@@ -366,21 +371,13 @@ export default function Home({ navigation }: any) {
                           <Text className="text-zinc-400 text-xs mb-3">Feito em {formatDataHora(item.dataPedido)}</Text>
                           
                           {item.status === 'aguardando_aprovacao' ? (
-                              <View className="bg-yellow-500/10 border border-yellow-500 p-2 rounded-lg items-center">
-                                  <Text className="text-yellow-500 font-bold text-xs">⏳ Aguardando Barbeiro Confirmar Pix</Text>
-                              </View>
+                              <View className="bg-yellow-500/10 border border-yellow-500 p-2 rounded-lg items-center"><Text className="text-yellow-500 font-bold text-xs">⏳ Aguardando Barbeiro Confirmar Pix</Text></View>
                           ) : item.status === 'aprovado' ? (
-                              <View className="bg-green-500/10 border border-green-500 p-2 rounded-lg items-center">
-                                  <Text className="text-green-400 font-bold text-xs">✅ Pagamento Aprovado! Retire na barbearia.</Text>
-                              </View>
+                              <View className="bg-green-500/10 border border-green-500 p-2 rounded-lg items-center"><Text className="text-green-400 font-bold text-xs">✅ Pagamento Aprovado! Retire na barbearia.</Text></View>
                           ) : item.status === 'entregue' ? (
-                              <View className="bg-zinc-700 p-2 rounded-lg items-center">
-                                  <Text className="text-zinc-400 font-bold text-xs">📦 Produto Entregue</Text>
-                              </View>
+                              <View className="bg-zinc-700 p-2 rounded-lg items-center"><Text className="text-zinc-400 font-bold text-xs">📦 Produto Entregue</Text></View>
                           ) : (
-                              <View className="bg-red-500/10 border border-red-500 p-2 rounded-lg items-center">
-                                  <Text className="text-red-400 font-bold text-xs">❌ Pedido Cancelado</Text>
-                              </View>
+                              <View className="bg-red-500/10 border border-red-500 p-2 rounded-lg items-center"><Text className="text-red-400 font-bold text-xs">❌ Pedido Cancelado</Text></View>
                           )}
                       </View>
                   )}

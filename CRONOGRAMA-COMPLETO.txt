@@ -1,10 +1,1 @@
-🗺️ Cronograma Completo — Delp SystemFaseStatusFoco da SprintPrincipais Entregas1✅Estabilidade e UX BaseCorreções de deep link, cancelamento e grade de 30 minutos.2✅Novo Fluxo do ClienteMáscaras no cadastro, auto-preenchimento e múltiplos serviços.3✅Mídias e IdentidadeUso direto de URLs de imagens para otimizar o banco de dados.4✅Motor FinanceiroPagamento de 50% via Pix e permissão de Super Admin.5✅Retenção e OrganizaçãoFidelidade customizável, Relatório de Frequência e Agenda em Blocos.6🟡O EcossistemaEM ANDAMENTO: Assinaturas VIP (Vitrine, Modal Pix e Painel de Aprovação concluídos).7🔴Testes de QA e LançamentoBateria de testes finais: App completo, alarme de 20 min (cliente) e aprovações do barbeiro.
-
-🎯 O que falta para finalizarmos a Fase 6?
-Para fechar a Fase 6 com 100% de aproveitamento, faltam apenas 3 entregas:
-
-Trava de Escopo VIP no Agendamento: Ajustar a lógica para que o cliente VIP só tenha isenção do Pix se agendar os serviços do plano dele. Se escolher um serviço extra (ex: Platinado), o Pix de 50% volta a ser cobrado normalmente.
-
-E-commerce / Lojinha da Barbearia: Criar a vitrine de produtos físicos (pomadas, ceras, óleos) com carrinho de compras e opção de reserva/pagamento no app.
-
-Sistema de Avaliações 5 Estrelas: Permitir que o cliente avalie o atendimento do barbeiro após a conclusão do serviço.
+🗺️ O Nosso Novo Cronograma CompletoAqui está o roadmap atualizado com todas as suas excelentes adições:FaseStatusFoco da SprintPrincipais Entregas1 a 7✅Core & E-commerceFluxos de agendamento, Pix, VIP, Lojinha e Avaliações finalizados.8🟡PRÓXIMO PASSO: Ajustes Visuais e EfeitosCorrigir sobreposição de botões, listas horizontais no PC e aplicar animações leves de interface.   9🔴Anti-Fraude de AgendamentosStatus "Aguardando Confirmação" para clientes e botão "Aprovar Pix" na agenda do barbeiro.10🔴Maps e EndereçosSuper Admin define endereço; App do cliente mostra Localização + integração visual com Maps.11🔴Compliance LGPDCriação da secção de Perfil do Cliente com opção nativa para "Excluir Conta e Dados".12🔴Notificações Push (Expo)Testes práticos de aviso ao Barbeiro (Novo Agendamento) e ao Cliente (Lembrete de 20 min).13🔴Lançamento OficialGeração do .apk (Android) e disponibilização da URL Web para produção.
