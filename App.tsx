@@ -17,6 +17,8 @@ import { auth } from './src/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -42,11 +44,54 @@ import FinancialScreen from './src/screens/FinancialScreen';
 import CustomersList from './src/screens/CustomersList';
 import SignUp from './src/screens/SignUp';
 import SuperAdmin from './src/screens/SuperAdmin';
-
-// NOVO: Tela de Gestão VIP
 import ManageVIPs from './src/screens/ManageVIPs';
 
 const Stack = createNativeStackNavigator();
+
+// --- FUNÇÃO PARA GERAR O TOKEN DE NOTIFICAÇÃO ---
+async function registerForPushNotificationsAsync() {
+  let token;
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Falha ao obter permissão para push notifications!');
+      return;
+    }
+    
+    try {
+        token = (await Notifications.getExpoPushTokenAsync({
+            projectId: Constants.expoConfig?.extra?.eas?.projectId,
+        })).data;
+        
+        console.log("\n=========================================");
+        console.log("🔔 SEU EXPO PUSH TOKEN É:");
+        console.log(token);
+        console.log("=========================================\n");
+        
+    } catch (e) {
+        console.log("Erro ao gerar token:", e);
+    }
+  } else {
+    console.log('\n⚠️ Você precisa usar um dispositivo físico para testar Push Notifications.\n');
+  }
+
+  return token;
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -57,12 +102,8 @@ export default function App() {
     async function initializeApp() {
       try {
         if (Platform.OS !== 'web') {
-            const { status: existingStatus } = await Notifications.getPermissionsAsync();
-            let finalStatus = existingStatus;
-            if (existingStatus !== 'granted') {
-                const { status } = await Notifications.requestPermissionsAsync();
-                finalStatus = status;
-            }
+            // Chama a função para registrar e pegar o Token
+            await registerForPushNotificationsAsync();
         }
 
         const shopId = await AsyncStorage.getItem('@delp_shopId');

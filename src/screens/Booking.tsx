@@ -88,7 +88,6 @@ export default function Booking({ route, navigation }: any) {
     setBusyTimes([]); 
     setSelectedTime(null); 
     try {
-        // SISTEMA ANTI-FRAUDE: Bloqueia a agenda tanto para quem já foi aprovado quanto para quem está aguardando
         const q = query(
             collection(db, "agendamentos"),
             where("barbeiroId", "==", barber.id),
@@ -111,17 +110,37 @@ export default function Booking({ route, navigation }: any) {
     }
   };
 
+  // --- ÁREA DA NOTIFICAÇÃO DO CLIENTE (MÁGICA DOS 20 MINUTOS) ---
   async function scheduleAppointmentReminder() {
-      if (Platform.OS === 'web') return;
+      if (Platform.OS === 'web') return; 
+      if (!selectedDate || !selectedTime) return;
+
       try {
-          await Notifications.scheduleNotificationAsync({
-              content: {
-                  title: "⏰ Faltam 20 minutos!",
-                  body: `Seu corte com ${barber.nome} está quase na hora. Não se atrase! ✂️`,
-                  sound: true,
-              },
-              trigger: { seconds: 10 } as any, 
-          });
+          // Separa a data (YYYY-MM-DD) e o horário (HH:MM)
+          const [year, month, day] = selectedDate.split('-');
+          const [hour, minute] = selectedTime.split(':');
+          
+          // Cria a data exata do agendamento
+          const appointmentDate = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+          
+          // Subtrai exatamente 20 minutos (20 * 60.000 milissegundos)
+          const triggerDate = new Date(appointmentDate.getTime() - (20 * 60000));
+          const now = new Date();
+
+          // Só agenda se o horário de disparo (20 min antes) ainda estiver no futuro
+          if (triggerDate > now) {
+              await Notifications.scheduleNotificationAsync({
+                  content: {
+                      title: "⏰ O seu corte é daqui a pouco!",
+                      body: `Faltam 20 minutos para o seu agendamento com ${barber.nome}. Não se atrase! ✂️`,
+                      sound: true,
+                  },
+                  trigger: { date: triggerDate } as any, 
+              });
+              console.log(`✅ Alarme local ativado silenciosamente para disparar em: ${triggerDate.toLocaleString()}`);
+          } else {
+              console.log("⚠️ Agendamento feito muito em cima da hora. O alarme de 20 min não será ativado.");
+          }
       } catch (error) { console.log("Erro notificação:", error); }
   }
 
@@ -180,7 +199,6 @@ export default function Booking({ route, navigation }: any) {
         return;
       }
 
-      // SISTEMA ANTI-FRAUDE: VIPs entram confirmados. Clientes normais entram aguardando Pix.
       const initialStatus = isServiceCovered ? 'confirmado' : 'aguardando_pix';
 
       await addDoc(collection(db, "agendamentos"), {
@@ -206,6 +224,15 @@ export default function Booking({ route, navigation }: any) {
         createdAt: new Date().toISOString()
       });
 
+      // --- MOCK DA NOTIFICAÇÃO DO BARBEIRO (Aparece no Terminal) ---
+      console.log("\n=======================================================");
+      console.log("🔔 [MOCK DE PUSH NOTIFICATION - AVISO AO BARBEIRO]");
+      console.log(`📱 Para: Telemóvel do Barbeiro (${barber.nome})`);
+      console.log(`💬 Título: Novo Agendamento Recebido!`);
+      console.log(`📄 Mensagem: ${userData.nome} agendou ${service.nome} para o dia ${selectedDate} às ${selectedTime}.`);
+      console.log("=======================================================\n");
+
+      // Dispara o algoritmo do alerta local
       scheduleAppointmentReminder();
 
       if (Platform.OS === 'web') {
@@ -393,7 +420,7 @@ export default function Booking({ route, navigation }: any) {
                   
                   <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
                       <Text className="text-zinc-300 mb-3 leading-6">
-                          <Text className="text-white font-bold">1. Atrasos: </Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
+                          <Text className="text-white font-bold">1. Atrasos:</Text> Temos uma tolerância máxima de <Text className="text-orange-500 font-bold">10 minutos</Text>. Após esse limite, seu horário poderá ser repassado a outro cliente para não prejudicar a agenda.
                       </Text>
                       
                       {!isServiceCovered && (
