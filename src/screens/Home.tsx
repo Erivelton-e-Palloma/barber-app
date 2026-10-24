@@ -67,7 +67,7 @@ export default function Home({ navigation }: any) {
                   const data = shopSnap.data();
                   if (data.nome) setShopName(data.nome);
                   if (data.logo) setShopLogo(data.logo); 
-                  if (data.metaFidelidade) setMetaFidelidade(data.metaFidelidade);
+                  if (data.metaFidelidade) setMeta(data.metaFidelidade); // CORREÇÃO: Setar estado Meta corretamente
                   setFidelidadeAtiva(data.fidelidadeAtiva ?? true); 
                   if (data.chavePixLoja) setChavePixLoja(data.chavePixLoja);
               }
@@ -216,7 +216,6 @@ export default function Home({ navigation }: any) {
   return (
     <ScrollView className="flex-1 bg-zinc-900 px-6 pt-12" contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
       
-      {/* CABEÇALHO ATUALIZADO (NOVO BOTÃO DE PERFIL) */}
       <View className="flex-row justify-between items-start mb-6">
         <View className="flex-row items-center flex-1 pr-2">
           {shopLogo ? <Image source={{ uri: shopLogo }} className="w-12 h-12 rounded-full mr-3 border border-orange-500" /> : <Text className="text-3xl mr-3">💈</Text>}
@@ -343,12 +342,60 @@ export default function Home({ navigation }: any) {
           </View>
       )}
 
+      {/* CORREÇÃO APLICADA: Modais realocados para evitar erro de agrupamento no Android */}
       <Modal visible={showPlanModal} transparent={true} animationType="slide">
-          <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50"><Text className="text-2xl mb-2 text-center">👑</Text><Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text><Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">Realize o pagamento via Pix:</Text><Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View></View><TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">{isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
+          <View className="flex-1 justify-end bg-black/80">
+            <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-yellow-500/50">
+              <Text className="text-2xl mb-2 text-center">👑</Text>
+              <Text className="text-white font-bold text-2xl text-center mb-1">Assinatura VIP</Text>
+              <Text className="text-zinc-400 text-center mb-6">Plano: {selectedPlan?.nome}</Text>
+              
+              <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                <Text className="text-white font-bold mb-2">Realize o pagamento via Pix:</Text>
+                <Text className="text-yellow-500 font-bold text-2xl mb-4">R$ {selectedPlan?.preco?.toFixed(2)}</Text>
+                <Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text>
+                <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2">
+                  <Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text>
+                  <TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity onPress={handleConfirmPayment} disabled={isRequesting} className="bg-yellow-600 p-4 rounded-xl items-center mb-3">
+                {isRequesting ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowPlanModal(false)} className="p-4 rounded-xl items-center mb-6">
+                <Text className="text-red-400 font-bold">Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
       </Modal>
 
       <Modal visible={showProductModal} transparent={true} animationType="slide">
-          <View className="flex-1 justify-end bg-black/80"><View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50"><Text className="text-2xl mb-2 text-center">🛍️</Text><Text className="text-white font-bold text-2xl text-center mb-1">Comprar Produto</Text><Text className="text-zinc-400 text-center mb-6">{selectedProduct?.nome}</Text><View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700"><Text className="text-white font-bold mb-2">Transfira o valor via Pix para garantir:</Text><Text className="text-orange-500 font-bold text-2xl mb-4">R$ {selectedProduct?.preco?.toFixed(2)}</Text><Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text><View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2"><Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text><TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity></View><Text className="text-zinc-500 text-xs italic mt-2">O produto será reservado assim que o barbeiro confirmar o Pix.</Text></View><TouchableOpacity onPress={handleConfirmProductPurchase} disabled={isBuyingProduct} className="bg-orange-500 p-4 rounded-xl items-center mb-3">{isBuyingProduct ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}</TouchableOpacity><TouchableOpacity onPress={() => setShowProductModal(false)} className="p-4 rounded-xl items-center mb-6"><Text className="text-red-400 font-bold">Cancelar</Text></TouchableOpacity></View></View>
+          <View className="flex-1 justify-end bg-black/80">
+            <View className="bg-zinc-900 p-6 rounded-t-3xl border-t border-orange-500/50">
+              <Text className="text-2xl mb-2 text-center">🛍️</Text>
+              <Text className="text-white font-bold text-2xl text-center mb-1">Comprar Produto</Text>
+              <Text className="text-zinc-400 text-center mb-6">{selectedProduct?.nome}</Text>
+              
+              <View className="bg-zinc-800 p-4 rounded-xl mb-6 border border-zinc-700">
+                <Text className="text-white font-bold mb-2">Transfira o valor via Pix para garantir:</Text>
+                <Text className="text-orange-500 font-bold text-2xl mb-4">R$ {selectedProduct?.preco?.toFixed(2)}</Text>
+                <Text className="text-zinc-400 text-sm mb-1">Chave Pix da Barbearia:</Text>
+                <View className="flex-row items-center justify-between bg-zinc-900 p-3 rounded-lg mb-2">
+                  <Text className="text-white font-bold">{chavePixLoja || "Chave não configurada"}</Text>
+                  <TouchableOpacity onPress={copyPix} className="bg-zinc-700 px-3 py-1 rounded"><Text className="text-white text-xs">Copiar</Text></TouchableOpacity>
+                </View>
+                <Text className="text-zinc-500 text-xs italic mt-2">O produto será reservado assim que o barbeiro confirmar o Pix.</Text>
+              </View>
+
+              <TouchableOpacity onPress={handleConfirmProductPurchase} disabled={isBuyingProduct} className="bg-orange-500 p-4 rounded-xl items-center mb-3">
+                {isBuyingProduct ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Já fiz o Pagamento ✅</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowProductModal(false)} className="p-4 rounded-xl items-center mb-6">
+                <Text className="text-red-400 font-bold">Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
       </Modal>
 
       <Modal visible={showMyOrdersModal} transparent={true} animationType="slide">
