@@ -96,24 +96,15 @@ async function registerForPushNotificationsAsync() {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialPublicRoute, setInitialPublicRoute] = useState('AccessScreen');
 
   useEffect(() => {
     async function initializeApp() {
       try {
         if (Platform.OS !== 'web') {
-            // Chama a função para registrar e pegar o Token
             await registerForPushNotificationsAsync();
         }
-
-        const shopId = await AsyncStorage.getItem('@delp_shopId');
-        if (shopId) {
-            setInitialPublicRoute('Login');
-        } else {
-            setInitialPublicRoute('AccessScreen');
-        }
       } catch (error) {
-        console.log("Erro ao recuperar dados:", error);
+        console.log("Erro inicial:", error);
       }
 
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -159,19 +150,10 @@ export default function App() {
           </>
         ) : (
           <Stack.Group screenOptions={{ headerShown: false }}>
-            {initialPublicRoute === 'Login' ? (
-                <>
-                    <Stack.Screen name="Login" component={Login} />
-                    <Stack.Screen name="AccessScreen" component={AccessScreen} />
-                </>
-            ) : (
-                <>
-                    <Stack.Screen name="AccessScreen" component={AccessScreen} />
-                    <Stack.Screen name="Login" component={Login} />
-                </>
-            )}
-            <Stack.Screen name="SuperAdmin" component={SuperAdmin} />
-            <Stack.Screen name="SignUp" component={SignUp} />
+              <Stack.Screen name="AccessScreen" component={AccessScreen} />
+              <Stack.Screen name="Login" component={Login} />
+              <Stack.Screen name="SuperAdmin" component={SuperAdmin} />
+              <Stack.Screen name="SignUp" component={SignUp} />
           </Stack.Group>
         )}
       </Stack.Navigator>

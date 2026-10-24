@@ -5,8 +5,7 @@ import {
   browserSessionPersistence, 
   getAuth 
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-// NOVO: Importando o Firebase Storage
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore"; // Importação ajustada
 import { getStorage } from "firebase/storage"; 
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -43,6 +42,8 @@ if (Platform.OS === 'web') {
 }
 
 export { auth };
-export const db = getFirestore(app);
-// NOVO: Exportando o Storage
+// Configuração para forçar leitura em tempo real e evitar cache com barbeiros antigos
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache()
+});
 export const storage = getStorage(app);

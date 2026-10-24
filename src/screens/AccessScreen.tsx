@@ -10,7 +10,6 @@ export default function AccessScreen({ navigation }: any) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Se o cliente já acessou uma barbearia antes, pula direto para o Login
     async function checkExisting() {
       const id = await AsyncStorage.getItem('@delp_shopId');
       if (id) {
@@ -22,17 +21,15 @@ export default function AccessScreen({ navigation }: any) {
   }, []);
 
   async function handleAccess() {
-    const cod = codigo.trim().toUpperCase(); // Padroniza o código para maiúsculas
+    const cod = codigo.trim().toUpperCase();
     if (!cod) return;
 
-    // Acesso Exclusivo do Dono do SaaS
     if (cod === 'DELPMASTER') {
       setCodigo('');
       navigation.navigate('SuperAdmin');
       return;
     }
 
-    // Acesso do Cliente à Barbearia Específica
     setLoading(true);
     try {
       const shopRef = doc(db, "barbearias", cod);
@@ -41,13 +38,12 @@ export default function AccessScreen({ navigation }: any) {
       if (shopSnap.exists()) {
         const data = shopSnap.data();
         
-        // Salva os dados de conexão da barbearia no aparelho
         await AsyncStorage.setItem('@delp_shopId', cod);
         await AsyncStorage.setItem('@delp_shopName', data.nome);
         if (data.ownerEmail) await AsyncStorage.setItem('@delp_ownerEmail', data.ownerEmail);
 
         setCodigo('');
-        navigation.navigate('Login'); // Vai para a tela de login da barbearia escolhida
+        navigation.replace('Login'); // Ajustado para não acumular telas
       } else {
         if (Platform.OS === 'web') alert("Código não encontrado. Verifique se digitou corretamente.");
         else Alert.alert("Não Encontrado", "Código da barbearia inválido.");
@@ -67,8 +63,9 @@ export default function AccessScreen({ navigation }: any) {
   return (
     <View className="flex-1 bg-[#1a1a1c] justify-center items-center px-6">
       <View className="items-center mb-8 mt-10">
-        <Text className="text-orange-500 text-6xl font-extrabold tracking-wider">DELP</Text>
-        <Text className="text-white text-xl font-semibold tracking-[0.3em] mt-1">SYSTEM</Text>
+        {/* CORREÇÃO APLICADA AQUI: Espaçamento numérico nativo em vez de classes de texto */}
+        <Text className="text-orange-500 text-6xl font-extrabold" style={{ letterSpacing: 2 }}>DELP</Text>
+        <Text className="text-white text-xl font-semibold mt-1" style={{ letterSpacing: 4 }}>SYSTEM</Text>
       </View>
 
       <Text className="text-zinc-400 text-sm mb-6 text-center">

@@ -10,7 +10,6 @@ export default function Login({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Função auxiliar para exibir alertas em Web e Mobile
   function showAlert(title: string, message: string) {
       if (Platform.OS === 'web') {
           alert(`${title}\n\n${message}`);
@@ -29,12 +28,10 @@ export default function Login({ navigation }: any) {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // O App.tsx vai perceber o login e mudar a tela sozinho
     } catch (error: any) {
       console.log(error);
       let msg = "Não foi possível entrar.";
       
-      // Traduzindo erros comuns do Firebase
       if (error.code === 'auth/invalid-email') msg = "Email inválido.";
       if (error.code === 'auth/user-not-found') msg = "Usuário não encontrado.";
       if (error.code === 'auth/wrong-password') msg = "Senha incorreta.";
@@ -46,7 +43,7 @@ export default function Login({ navigation }: any) {
     }
   }
 
-  // NOVA FUNÇÃO: Limpa a barbearia atual da memória e volta para o código
+  // NOVA FUNÇÃO: Força o reset da pilha de navegação
   async function handleTrocarBarbearia() {
       try {
           await AsyncStorage.removeItem('@delp_shopId');
@@ -57,6 +54,7 @@ export default function Login({ navigation }: any) {
               index: 0,
               routes: [{ name: 'AccessScreen' }],
           });
+          
       } catch (error) {
           console.log("Erro ao limpar dados:", error);
       }
@@ -120,7 +118,6 @@ export default function Login({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
-      {/* BOTÃO ATUALIZADO COM A FUNÇÃO DE LIMPEZA */}
       <TouchableOpacity onPress={handleTrocarBarbearia} className="mt-8">
         <Text className="text-zinc-600 text-center text-xs underline">
             Trocar de Barbearia (Código)

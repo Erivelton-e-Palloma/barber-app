@@ -1,8 +1,8 @@
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import React, { useState, useEffect } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform, Switch } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { db } from '../config/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AdminPanel() {
@@ -36,26 +36,30 @@ export default function AdminPanel() {
   }, []);
 
   async function saveShopConfig() {
-    if (!shopId) return;
-    setLoadingConfig(true);
-    try {
-      const shopRef = doc(db, "barbearias", shopId);
-      await updateDoc(shopRef, { 
-          metaFidelidade: metaFidelidade, 
-          fidelidadeAtiva: fidelidadeAtiva,
-          chavePixLoja: chavePixLoja,
-          enderecoLoja: enderecoLoja,
-          linkMapsLoja: linkMapsLoja
-      });
-      if (Platform.OS === 'web') alert("Configurações atualizadas com sucesso!");
-      else Alert.alert("Sucesso", "Configurações atualizadas com sucesso!");
-    } catch (error) {
-      if (Platform.OS === 'web') alert("Erro ao salvar.");
-      else Alert.alert("Erro", "Não foi possível salvar a configuração.");
-    } finally {
-      setLoadingConfig(false);
-    }
+  if (!shopId) return;
+  setLoadingConfig(true);
+  try {
+    const shopRef = doc(db, "barbearias", shopId);
+    
+    // O segredo para o Android não falhar: setDoc com { merge: true }
+    await setDoc(shopRef, { 
+        metaFidelidade: metaFidelidade, 
+        fidelidadeAtiva: fidelidadeAtiva,
+        chavePixLoja: chavePixLoja || "",
+        enderecoLoja: enderecoLoja || "",
+        linkMapsLoja: linkMapsLoja || ""
+    }, { merge: true });
+
+    if (Platform.OS === 'web') alert("Configurações atualizadas com sucesso!");
+    else Alert.alert("Sucesso", "Configurações atualizadas com sucesso!");
+  } catch (error) {
+    console.log("Erro Firebase Nativo:", error);
+    if (Platform.OS === 'web') alert("Erro ao salvar.");
+    else Alert.alert("Erro", "Não foi possível salvar a configuração.");
+  } finally {
+    setLoadingConfig(false);
   }
+}
 
   return (
     <ScrollView 
